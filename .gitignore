@@ -1,0 +1,45 @@
+# .gitignore
+
+# python cache
+__pycache__/*
+__pycache__/
+*.pyc
+
+# vscode configs
+.vscode
+
+# run dir
+/runs/*
+!/runs/.gitkeep
+
+# datasets dir
+/datasets/*
+!/datasets/.gitkeep
+
+# ultralytics
+/ultralytics/*
+!/ultralytics/.gitkeep
+
+# ScrGrabber
+/ScrGrabber
+
+# medias
+*.mp4
+*.png
+*.jpg
+
+
+/tt.py
+
+# midas
+/midas/*
+!/midas/.gitkeep
+
+# gen-efficientnet-pytorch
+/gen-efficientnet-pytorch/*
+!/gen-efficientnet-pytorch/.gitkeep
+
+# models
+/model/*
+!/model/.gitkeep
+*.pt
