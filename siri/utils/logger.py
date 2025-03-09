@@ -1,7 +1,7 @@
 from siri.global_config import GlobalConfig as cfg
 
 
-def lprint(obj, x, debug=False):
+def lprint_(obj, x, debug=False):
     if debug and not cfg.debug: return
 
     buff = ''
@@ -17,8 +17,10 @@ def lprint(obj, x, debug=False):
         buff += x
     else:
         buff += f"{str(x)} type={str(type(x))}"
+    return buff
 
-    print(buff)
+def lprint(obj, x, debug=False):
+    print(lprint_(obj, x, debug=debug))
 
 
 def print_obj(obj):
