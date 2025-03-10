@@ -1,8 +1,7 @@
-import os,time
+import os,time,cv2
 import sys
 import json
 import pprint
-import pickle
 import numpy as np
 from random import sample
 from typing import Union, List, Tuple, Dict
@@ -18,6 +17,13 @@ def print_dict(data):
     }
     pprint.pp(summary)
 
+def iterable_eq(a,b):
+    if len(a) != len(b):
+        return False
+    for i in range(len(a)):
+        if a[i] != b[i]:
+            return False
+    return True
 
 def print_list(data):
     assert isinstance(data, list)
@@ -32,33 +38,127 @@ def print_list(data):
     print("]")
 
 
+def check_nan(traj_np):
+    is_not_nan = np.zeros((len(traj_np),), dtype=int)
+    for i in range(len(traj_np)):
+        is_not_nan[i] = -np.any(np.isnan(traj_np[i]), axis=None).astype(int) + 1
+    
+    not_nan_ratio = (np.sum(is_not_nan, axis=0)/len(is_not_nan))
+    assert not_nan_ratio == 1., f"not_nan_ratio={not_nan_ratio}"
+
+
+def print_nan(traj_np):
+    is_not_nan = np.zeros((len(traj_np),), dtype=int)
+    for i in range(len(traj_np)):
+        is_not_nan[i] = -np.any(np.isnan(traj_np[i]), axis=None).astype(int) + 1
+
+    print(f"not NaN percent: {round(np.sum(is_not_nan, axis=0)/len(is_not_nan) * 100, 2)}%")
+
+
 def is_basic_type(obj):
     if (
         isinstance(obj, int) or isinstance(obj, bool) or isinstance(obj, str) 
         or isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, dict)
+        or (obj is None)
     ):
         return True
     else:
         return False
+
+
+def save_and_compress_FRAMEs(FRAMEs: np.ndarray, path, FRAMEs_name):
+    FRAMES_dir_name = f"{FRAMEs_name}.d"
+    FRAMEs_dir = os.path.join(path, FRAMES_dir_name)
+    if not os.path.exists(FRAMEs_dir):
+        os.makedirs(FRAMEs_dir)
+
+    image_data = []
+    for i, img_np in enumerate(FRAMEs):
+        file_name = os.path.join(FRAMES_dir_name, f"{FRAMEs_name}_{i}.png")
+        if np.any(np.isnan(img_np), axis=None) or np.all(img_np == 0):
+            is_nan = True
+        else:
+            is_nan = False
+            img_path = os.path.join(path, file_name)
+            cv2.imwrite(img_path, img_np)
+        print(f"\r[save_and_compress_FRAMEs] saving {file_name}, is_nan={is_nan}", end='')
+        image_data.append({
+            'file_name': file_name,
+            'shape': img_np.shape,
+            'is_nan': is_nan
+        })
+    print(end='\n')
+
+    json_path = os.path.join(path, f"{FRAMEs_name}.json")
+    with open(json_path, 'w') as f:
+        json.dump(image_data, f)
+
+
+def load_compressed_FRAMEs(path, FRAMEs_name):
+    with open(os.path.join(path, f"{FRAMEs_name}.json"), 'r') as f:
+        meta_data = json.load(f)
+
+    images = []
+    for img_info in meta_data:
+        file_name = img_info['file_name']
+        expected_shape = img_info['shape']
+        if ('is_nan' in img_info) and img_info['is_nan'] == True:
+            is_nan = True
+            img_np = np.zeros(expected_shape, dtype=np.uint8)
+            # img_np[...] = np.nan
+        else:
+            is_nan = False
+            img_path = os.path.join(path, file_name)
+            img_np = cv2.imread(img_path).astype(np.uint8)
+            loaded_shape = img_np.shape
+
+            if not iterable_eq(expected_shape, loaded_shape):
+                raise ValueError(f"Image {file_name} has inconsistent shape. "
+                                f"Expected: {expected_shape}, Got: {loaded_shape}")
+            
+        print(f"\r[load_compressed_FRAMEs] loading {file_name}, is_nan={is_nan}", end='')
+
+        # if len(expected_shape) == 3 and expected_shape[2] == 3:
+        #     img_np = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
+
+        images.append(img_np)
+    print(end='\n')
+    
+    return np.array(images)
+
 
 def safe_dump(obj, path):
     if not os.path.exists(path): os.makedirs(path)
     cls_name = obj.__class__.__name__
     serializable_data = {}
     numpy_arrays = {}
+    FRAMEs = {}
     for attr, value in obj.__dict__.items():
-        if isinstance(value, np.ndarray):
+        if str(attr).startswith("FRAME"): 
+            assert isinstance(value, np.ndarray)
+            print(f"[safe_dump] {obj.__class__.__name__}.{attr} is FRAME type")
+            FRAMEs[attr] = value
+        elif isinstance(value, np.ndarray):
             numpy_arrays[attr] = value
         elif is_basic_type(value):
             serializable_data[attr] = value
         else:
-            assert False, 'not implemented yet'
+            assert False, f'not implemented yet, key={attr} type={type(value)}'
+
     npy_filenames = {}
     for key, array in numpy_arrays.items():
         npy_filename = f"{cls_name}_{key}.npy"
         np.save(f"{path}/{npy_filename}", array, allow_pickle=True)
         npy_filenames[key] = npy_filename
     serializable_data['npy_filenames'] = npy_filenames
+
+    FRAMEs_filenames = {}
+    for key, frame in FRAMEs.items():
+        FRAMEs_name = f"{cls_name}_{key}"
+        save_and_compress_FRAMEs(frame, path, FRAMEs_name)
+        FRAMEs_filenames[key] = FRAMEs_name
+    serializable_data['FRAMEs_filenames'] = FRAMEs_filenames
+
     with open(f"{path}/{cls_name}.json", 'w') as f:
         json.dump(serializable_data, f)
 
@@ -71,6 +171,7 @@ def safe_load(obj, path):
     cls_name = obj.__class__.__name__
     serializable_data = {}
     numpy_arrays = {}
+    FRAMEs = {}
     with open(f"{path}/{cls_name}.json", 'r') as f:
         serializable_data = json.load(f)
     assert isinstance(serializable_data, dict)
@@ -79,31 +180,35 @@ def safe_load(obj, path):
     for key, npy_filename in npy_filenames.items():
         numpy_arrays[key] = np.load(f"{path}/{npy_filename}", allow_pickle=True)
 
-    for attr, value in serializable_data.items():
-        setattr(obj, attr, value)
-    for attr, value in numpy_arrays.items():
+    if 'FRAMEs_filenames' in serializable_data:
+        FRAMEs_filenames = serializable_data.pop('FRAMEs_filenames')
+        for key, FRAMEs_name in FRAMEs_filenames.items():
+            FRAMEs[key] = load_compressed_FRAMEs(path, FRAMEs_name)
+
+    for attr, value in {**serializable_data, **numpy_arrays, **FRAMEs}.items():
         setattr(obj, attr, value)
     
     return obj
 
 
-def safe_dump_traj_pool(traj_pool, pool_name):
+def safe_dump_traj_pool(traj_pool, pool_name, traj_dir=None):
     default_traj_dir = f"{cfg.logdir}/traj_pool_safe/"
-    if os.path.islink(default_traj_dir):
-        os.unlink(default_traj_dir)
-    traj_dir = f"{cfg.logdir}/{time.strftime("%Y%m%d-%H:%M:%S")}/"
+    if traj_dir is None: traj_dir = f"{cfg.logdir}/{time.strftime("%Y%m%d-%H:%M:%S")}/"
     
     for index, traj in enumerate(traj_pool):
         traj_name = f"traj-{pool_name}-{index}.d"
         safe_dump(obj=traj, path=f"{traj_dir}/{traj_name}")
     
         print亮黄(f"traj saved in file: {traj_dir}/{traj_name}")
-    os.symlink(os.path.abspath(traj_dir), os.path.abspath(default_traj_dir))
+
+    # if os.path.islink(default_traj_dir[:-1]):
+    #     os.unlink(default_traj_dir[:-1])
+    # os.symlink(os.path.abspath(traj_dir), os.path.abspath(default_traj_dir))
 
 
 class safe_load_traj_pool:
-    def __init__(self, max_len=None):
-        self.traj_dir = f"{cfg.logdir}/traj_pool_safe/"
+    def __init__(self, max_len=None, traj_dir="traj_pool_safe"):
+        self.traj_dir = f"{cfg.logdir}/{traj_dir}/"
         self.traj_names = os.listdir(self.traj_dir)
         if max_len is not None:
             assert max_len > 0
@@ -111,18 +216,19 @@ class safe_load_traj_pool:
                 self.traj_names = self.traj_names[:max_len]
     
     def __call__(self, pool_name='', n_samples=200):
-        from .inputs import trajectory
+        from .traj import trajectory
         traj_pool = []
         if len(self.traj_names) > n_samples:
             n_samples = max(n_samples, 0)
             self.traj_names = sample(self.traj_names, n_samples)
+
         
         for i, traj_name in enumerate(self.traj_names):
             if traj_name.startswith(f"traj-{pool_name}"):
                 print(traj_name)
 
                 traj = safe_load(
-                    obj=trajectory(traj_limit=int(cfg.ScenarioConfig.MaxEpisodeStep), env_id=i),
+                    obj=trajectory(traj_limit='auto loaded', env_id='auto loaded'),
                     path=f"{self.traj_dir}/{traj_name}"
                 )
                 traj_pool.append(traj)
@@ -131,85 +237,6 @@ class safe_load_traj_pool:
         
         print(f"safe loaded {len(traj_pool)} trajs")
         return traj_pool
-
-
-def load_all_traj_pool(dir=None, idx:list=None):
-    """
-        Load all trj_pool in traj_pool_dir for behavior cloning.
-    """
-    MAX_TRAJ_POOL_NUM = 10
-    if idx is None: idx = [ _ for _ in range(MAX_TRAJ_POOL_NUM) ]
-    traj_pool_dir = f"{cfg.logdir}/traj_pool/" if dir is None else dir
-    if not os.path.exists(traj_pool_dir): raise FileNotFoundError("traj_pool_dir not found")
-
-    new_traj_pool = []
-    traj_pool_file_path = lambda cnt: f"{traj_pool_dir}/traj_pool-{cnt}.pkl"
-    for id in idx:
-        if os.path.exists(traj_pool_file_path(id)):
-            with open(traj_pool_file_path(id), "rb") as pkl_file:
-                from .inputs import trajectory
-                import ALGORITHM.ppo_ma_with_mask_predict_test_bc_daggr
-                sys.modules["ALGORITHM.ppo_ma_with_mask_test_bc"] = ALGORITHM.ppo_ma_with_mask_predict_test_bc_daggr
-                traj_pool_slice = pickle.load(pkl_file)
-                assert isinstance(traj_pool_slice, list)
-                # print(f"traj_pool_file loaded : {traj_pool_file_path(id)}")
-            new_traj_pool += traj_pool_slice 
-        else:
-            print亮黄(f"warning: {traj_pool_file_path(idx)} not found, skip loading")
-
-    return new_traj_pool if len(new_traj_pool) > 0 else None
-
-
-def load_traj_pool(cnt, dir=None):
-    """
-        Load one trj_pool for behavior cloning.
-    """ 
-    traj_pool_dir = f"{cfg.logdir}/traj_pool/" if dir is None else dir
-    traj_pool_file_path = lambda cnt_: f"{traj_pool_dir}/traj_pool-{cnt_}.pkl"
-    if not os.path.exists(traj_pool_file_path(cnt)):
-        # print亮黄(f"warning: {traj_pool_file_path(cnt)} not found, skip loading")
-        return None
-
-    with open(traj_pool_file_path(cnt), "rb") as pkl_file:
-        from .inputs import trajectory
-        traj_pool_slice = pickle.load(pkl_file)
-        assert isinstance(traj_pool_slice, list[trajectory])
-
-    # print亮黄(f"traj_pool_file loaded : {traj_pool_file_path(cnt)}")
-
-    return traj_pool_slice
-
-
-def load_container(cnt, dir=None):
-    """
-        Load one container for behavior cloning.
-    """ 
-    container_dir = f"{cfg.logdir}/traj_container/" if dir is None else dir
-    container_file_path = lambda cnt_: f"{container_dir}/container-{cnt_}.pkl"
-    if not os.path.exists(container_file_path(cnt)):
-        print(f"warning: {container_file_path(cnt)} not found, skip loading")
-        return None
-
-    with open(container_file_path(cnt), "rb") as pkl_file:
-        container = pickle.load(pkl_file)
-        assert isinstance(container, dict)
-
-    print(f"traj_pool_file loaded : {container_file_path(cnt)}")
-
-    return container
-
-
-def save_container(container, cnt, dir=None):
-    """
-        Try saving container for behavior cloning.
-    """
-    container_file_name = f"container-{cnt}.pkl"
-    container_dir = f"{cfg.logdir}/traj_container/"
-    
-    if not os.path.exists(container_dir): os.makedirs(container_dir)
-    with open(f"{container_dir}/{container_file_name}", "wb") as pkl_file:
-        pickle.dump(container, pkl_file)
-    print(f"container saved in file: {container_dir}/{container_file_name}")
 
 
 

@@ -97,6 +97,18 @@ class TRAJ_BASE():
         # check is buffer size too big
         if n_frame > TRAJ_BASE.max_mem_length: 
             TRAJ_BASE.max_mem_length = n_frame
-            print('max_mem_length：%d, traj_limit:%d'%(TRAJ_BASE.max_mem_length, self.traj_limit))
+            print('max_mem_length:%d, traj_limit:%d'%(TRAJ_BASE.max_mem_length, self.traj_limit))
         # clip tail
         for key in self.key_dict: setattr(self, key, TJ(key)[:n_frame])
+
+class trajectory(TRAJ_BASE):
+    pass
+    # def init_track(self, key, first_content):
+    #     content = first_content
+    #     self.check_type_shape(key, first_content)
+    #     assert isinstance(content, np.ndarray) or isinstance(content, np.ScalarType), (key, content.__class__)
+    #     tensor_size = ((self.traj_limit,) + tuple(content.shape))
+    #     set_item = np.zeros(shape=tensor_size, dtype=content.dtype)
+    #     set_item[...] = np.nan
+    #     setattr(self, key, set_item)
+    #     self.key_dict.append(key)

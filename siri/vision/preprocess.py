@@ -20,6 +20,14 @@ def to_int(obj):
         assert False
 
 
+def crop_wh(frame, margin_pix_w, margin_pix_h):
+    orig_shape = frame.shape
+    assert 2*margin_pix_h < orig_shape[0]
+    assert 2*margin_pix_w < orig_shape[1]
+    frame = frame[margin_pix_h:orig_shape[0]-margin_pix_h, margin_pix_w:orig_shape[1]-margin_pix_w]
+    return frame
+
+
 def crop(image_origin):
     height, width = image_origin.shape[:2]
 

@@ -8,7 +8,7 @@ from siri.global_config import GloablStatus, GlobalConfig as cfg
 from siri.utils.logger import lprint, lprint_
 from siri.vision.preprocess import crop
 from UTIL.colorful import *
-from .traj import TRAJ_BASE
+from .traj import trajectory
 from .utils import safe_dump_traj_pool
 
 
@@ -71,18 +71,12 @@ def on_mouse_release(x, y, button, _):
     #    actions[MOUSE_BUTTONS[button]] = 0
 
 
-
-class trajectory(TRAJ_BASE):
-    def __init__(self, traj_limit, env_id):
-        super().__init__(traj_limit, env_id)
-
-
 class Grabber(ScrGrabber):
     def __init__(self):
         super().__init__()
-        self.traj_pool = []
-        self.tick = 0.04
-        self.traj_limit = 800
+        self.traj_pool: list[trajectory] = []
+        self.tick = 0.1
+        self.traj_limit = 400
         self.sz = 640
         lprint(self, f"traj time limit: {self.tick * self.traj_limit}")
     
@@ -121,16 +115,19 @@ class Grabber(ScrGrabber):
         
         try:
             with mss.mss() as sct:
-                global start, stop
+                global start, stop, new_mouse_pos, last_mouse_pos, actions
                 stop = 1
                 while True:
                     if stop:
-                        self.traj_pool.append(traj)
-                        traj = self.new_traj()
+                        if traj.time_pointer > 0:
+                            self.traj_pool.append(traj)
+                            traj = self.new_traj()
                         print(end='\n')
                         while not start: 
                             time.sleep(0.25)
                             print靛('\r'+lprint_(self, "paused"), end='')
+                        init_actions()
+                        new_mouse_pos = None; last_mouse_pos = None
                         stop = 0
                     start = 0
                     print绿('\r'+lprint_(self, f"started, traj collected: {len(self.traj_pool)}"), end='')
@@ -149,13 +146,13 @@ class Grabber(ScrGrabber):
                     if frame.shape[-1] == 4:
                         frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
                     assert frame.shape[-1] == 3, 'not a BGR format'
-                    # frame = cv2.resize(frame, cfg.sz_wh)
-                    frame = crop(frame)
-                    frame = cv2.resize(frame, (self.sz, self.sz,))
-                    traj.remember('frame', frame.copy())
-                    self.save_frame(frame)
+                    traj.remember('FRAME_raw', frame.copy())
 
-                    global new_mouse_pos, last_mouse_pos, actions
+                    # frame = cv2.resize(frame, cfg.sz_wh)
+                    # frame = crop(frame)
+                    # frame = cv2.resize(frame, (self.sz, self.sz,))
+                    # traj.remember('FRAME_cropped', frame.copy())
+
                     if (new_mouse_pos is not None) and (last_mouse_pos is not None):
                         mouse_movement = new_mouse_pos - last_mouse_pos
                         mouse_movement = mouse_movement.astype(np.float32)
@@ -168,8 +165,8 @@ class Grabber(ScrGrabber):
                         print(actions)
                     # if mouse_movement.any():
                     #     print(mouse_movement)
-                    traj.remember('keyboard', act)
-                    traj.remember('mouse_movement', mouse_movement.copy())
+                    traj.remember('key', act)
+                    traj.remember('mouse', mouse_movement.copy())
                     traj.time_shift()
                     # actions = init_actions()
                     sleeper.sleep()
@@ -179,6 +176,7 @@ class Grabber(ScrGrabber):
             # cv2.destroyAllWindows()
             GloablStatus.monitor = None
             GloablStatus.stop_event.set()
+            for i in range(len(self.traj_pool)): self.traj_pool[i].cut_tail()
             pool_name = f"{self.__class__.__name__}-tick={self.tick}-limit={self.traj_limit}-sz={self.sz}-{time.strftime("%Y%m%d-%H:%M:%S")}"
             safe_dump_traj_pool(self.traj_pool, pool_name)
             print亮黄(lprint_(self, "terminated"))

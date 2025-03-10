@@ -19,7 +19,7 @@ class GlobalConfig:
     # tick = 0.05
     # tick = 1
     # sz_wh = (640, 360,)
-    sz_wh = (1280, 574)
+    sz_wh = (1280, 578)
 
     manual_preprocess=False
 
