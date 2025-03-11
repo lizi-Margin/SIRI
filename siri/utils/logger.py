@@ -20,7 +20,8 @@ def lprint_(obj, x, debug=False):
     return buff
 
 def lprint(obj, x, debug=False):
-    print(lprint_(obj, x, debug=debug))
+    buff = lprint_(obj, x, debug=debug)
+    if buff is not None: print(buff)
 
 
 def print_obj(obj):

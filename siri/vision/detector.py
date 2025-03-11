@@ -129,7 +129,11 @@ class Target:
         self.h = h
         self.cls = cls
 
-
+class FakeDeepPredictor:
+    def predict(self, frame_or_batch: Union[np.ndarray, List[np.ndarray]]):
+        deep_obs = {'f': 0, 'l': 0, 'r': 0}
+        deep_frame_shape = frame_or_batch[0].shape[:2]
+        return deep_obs, (np.ones(deep_frame_shape, dtype=np.float32) * 100)
 class DeepPredictor:
     def __init__(self):
         # 加载 MiDaS 模型
@@ -289,7 +293,8 @@ class Detector(threading.Thread):
         from ultralytics import YOLO
         assert isinstance(model, YOLO)
         self.model = model
-        self.deep_model = DeepPredictor()
+        # self.deep_model = DeepPredictor()
+        self.deep_model = FakeDeepPredictor()
         self.tracker = sv.ByteTrack()
         self.make_obs = ObsMaker()
         # self.feature_detector = HealthBarFeatureDetector(
@@ -469,6 +474,7 @@ class Detector(threading.Thread):
 
     
     def predict_and_make_obs(self, frame):
+        frame_original = frame.copy()
         results = self._predict(frame)
         # frame = frame.copy()
         # print(results)
@@ -511,7 +517,7 @@ class Detector(threading.Thread):
 
         obs = {
             'in_scope': in_scope,
-            'frame': frame.copy(),
+            'frame': frame_original.copy(),
             'deep_frame': deep_frame.copy()
         }
         obs.update(deep_obs)
@@ -526,7 +532,8 @@ class Detector(threading.Thread):
 
         if self.sv_source_hook is not None:
             self.sv_source_hook({'frame': frame.copy(),
-                                 'deep_frame': deep_frame.copy(),
+                                #  'deep_frame': deep_frame.copy(),
+                                 'deep_frame': None,
                                  'detections': None if annotated else sv_detections})
 
 

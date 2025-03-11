@@ -92,7 +92,7 @@ class Visualizer(threading.Thread):
                     self.img.update_image(annotated_frame)
                     self.app.processEvents()
                 else:
-                    raise NotImplementedError
+                    raise NotImplementedError()
                 sleeper.sleep()
         except KeyboardInterrupt:
             lprint(self, "Sig INT catched, stopping session.")
@@ -214,7 +214,8 @@ class Visualizer(threading.Thread):
                 cv2.rectangle(frame, (x, y), (x + KEY_SIZE, y + KEY_SIZE), color, -1)
                 cv2.putText(frame, key.upper(), (x + 10, y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
-
+        if deep_frame is None:
+            return frame
 
         if len(deep_frame.shape) == 2:
             # 归一化到 [0, 255]

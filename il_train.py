@@ -4,17 +4,17 @@ from siri.utils.logger import lprint
 from imitation.utils import safe_load_traj_pool, safe_dump_traj_pool, print_dict, get_container_from_traj_pool, print_nan, check_nan
 from imitation.discretizer import SimpleDiscretizer, wasd_Discretizer
 from imitation.bc import wasd_xy_Trainer
-from imitation.net import SimpleNet, SimpleNetActor
+from imitation.net import LSTMNet as Net, NetActor
 from siri.vision.preprocess import crop_wh
 
-x_discretizer = SimpleNetActor.x_discretizer
-y_discretizer = SimpleNetActor.y_discretizer
-wasd_discretizer = SimpleNetActor.wasd_discretizer
-preprocess = SimpleNetActor.preprocess
-get_center = SimpleNetActor.get_center
+x_discretizer = NetActor.x_discretizer
+y_discretizer = NetActor.y_discretizer
+wasd_discretizer = NetActor.wasd_discretizer
+preprocess = NetActor.preprocess
+get_center = NetActor.get_center
 
-CENTER_SZ_WH = SimpleNetActor.CENTER_SZ_WH
-policy = SimpleNet(CENTER_SZ_WH, wasd_discretizer.n_actions, x_discretizer.n_actions, y_discretizer.n_actions)
+CENTER_SZ_WH = NetActor.CENTER_SZ_WH
+policy = Net(CENTER_SZ_WH, wasd_discretizer.n_actions, x_discretizer.n_actions, y_discretizer.n_actions)
 trainer = wasd_xy_Trainer(policy)
 trainer.load_model()
 
@@ -69,8 +69,9 @@ def load_and_train():
     trainer.train_on_data_(data)
 
 if __name__ == '__main__':
-    N_LOAD = 200
+    N_LOAD = 2000
     for i in range(N_LOAD):
         decoration = "_" * 20
         print(decoration + f" load{i} starts " + decoration)
         load_and_train()
+        time.sleep(30)

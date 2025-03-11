@@ -56,9 +56,9 @@ class wasd_xy_Trainer():
 
         for epoch in range(num_epoch):
             N = len(next(iter(data.values())))
-            n = AlgorithmConfig.sample_size
-            indices = np.random.choice(N, n, replace=False)
-            sample = {key: value[indices] for key, value in data.items()}
+            n = min(AlgorithmConfig.sample_size, N)
+            start = np.random.choice(max(N-n, 1))
+            sample = {key: value[start:start+n] for key, value in data.items()}
 
             self.optimizer.zero_grad()
 

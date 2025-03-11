@@ -8,6 +8,7 @@ from pynput.keyboard import Controller as KBController
 from siri.global_config import GloablStatus
 from siri.global_config import GlobalConfig as cfg
 from siri.utils.logger import lprint
+from siri.utils.sleeper import Sleeper
 
 
 
@@ -211,6 +212,15 @@ class StateMachine:
         self.kb_sm_lesure.add_key('4', '5', '6')
         self.kb_sm_fight.add_key('g')
 
+        self.USE_MODEL = True
+        if self.USE_MODEL:
+            from imitation.net import NetActor, LSTMNet
+            self.model_tick = 0.1
+            self.model = NetActor(LSTMNet).to('cuda')
+            self.model.load_model("./imitation_TRAIN/BC/model.pt")
+            self.model.train(False)
+            self.model.net.reset()
+
         self._fire_start_t_ = None
         self._last_fire_end_t_ = -100.
 
@@ -255,6 +265,7 @@ class StateMachine:
         assert 'deep_frame' in obs
         no_target = (not 'xy' in obs)
         deep_frame = obs['deep_frame']
+        frame = obs['frame']
         f = obs['f']
         l = obs['l']
         r = obs['r']
@@ -308,6 +319,7 @@ class StateMachine:
 
         in_search = False
         in_chase = False
+        need_slp = False
 
         if no_target:
             self.aimer.pid.reset()
@@ -317,31 +329,58 @@ class StateMachine:
                 act_dict = self.kb_sm_lesure.step(act_dict)
 
             if self._last_fire_t > 2 and self._last_search_t > SEARCH_W_T:
-                in_search = True
-                if self._search_start_t_ is None:
-                    self._start_search()
+                if self.USE_MODEL:
+                    assert self.model_tick > cfg.tick
+                    slp = Sleeper(tick = self.model_tick - cfg.tick)
+                    need_slp = True
 
-                    press_kb_bt('w')
-                act_dict['w'] = 1
-
-                if f:
+                    in_search = True
+                    if self._search_start_t_ is None:
+                        self._start_search()
+                        self.model.net.reset()
+                    
+                    wasd, xy = self.model.act([frame])
+                    limit = 500
+                    mv_x, mv_y = norm(xy[0], lower_side=-limit, upper_side=limit), norm(xy[1], lower_side=-limit, upper_side=limit)
                     # unpress_kb_bt()
-                    # press_kb_bt('w')
-                    # hit_kb_bt('w')
-                    # press_kb_bt('w')
+                    if wasd[0] > 0:
+                        act_dict['w'] = 1
+                        press_kb_bt('w')
+                    elif wasd[1] > 0:
+                        act_dict['a'] = 1
+                        press_kb_bt('a')
+                    elif wasd[2] > 0:
+                        act_dict['s'] = 1
+                        press_kb_bt('s')
+                    elif wasd[3] > 0:
+                        act_dict['d'] = 1
+                        press_kb_bt('d')
+                else:
+                    in_search = True
+                    if self._search_start_t_ is None:
+                        self._start_search()
+
+                        press_kb_bt('w')
                     act_dict['w'] = 1
-                elif l:
-                    # unpress_kb_bt()
-                    # press_kb_bt('a')
-                    # hit_kb_bt('a')
-                    act_dict['a'] = 1
-                    mv_x = -120
-                elif r:
-                    # unpress_kb_bt()
-                    # press_kb_bt('d')
-                    # hit_kb_bt('d')
-                    act_dict['d'] = 1
-                    mv_x = 120
+
+                    if f:
+                        # unpress_kb_bt()
+                        # press_kb_bt('w')
+                        # hit_kb_bt('w')
+                        # press_kb_bt('w')
+                        act_dict['w'] = 1
+                    elif l:
+                        # unpress_kb_bt()
+                        # press_kb_bt('a')
+                        # hit_kb_bt('a')
+                        act_dict['a'] = 1
+                        mv_x = -120
+                    elif r:
+                        # unpress_kb_bt()
+                        # press_kb_bt('d')
+                        # hit_kb_bt('d')
+                        act_dict['d'] = 1
+                        mv_x = 120
             else:
                 if self._last_search_t > SEARCH_W_T/2 and self._last_detect_t > 4:
                     mv_x = -130 if int(self._last_detect_end_t_) % 2 == 0 else 130
@@ -392,6 +431,10 @@ class StateMachine:
             unpress_kb_bt()
         
         move_mouse(mv_x, mv_y)
+
+        if need_slp:
+            slp.sleep()
+
         act_dict['mv_xy'] = (mv_x, mv_y,)
         act_dict['fire'] = 1 if (self._fire_start_t_ is not None) else 0
         act_dict['scope'] = 1 if (self._scope_start_t_ is not None) else 0

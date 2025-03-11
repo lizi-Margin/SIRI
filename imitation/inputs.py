@@ -76,7 +76,7 @@ class Grabber(ScrGrabber):
         super().__init__()
         self.traj_pool: list[trajectory] = []
         self.tick = 0.1
-        self.traj_limit = 400
+        self.traj_limit = 200
         self.sz = 640
         lprint(self, f"traj time limit: {self.tick * self.traj_limit}")
     

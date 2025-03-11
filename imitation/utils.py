@@ -271,3 +271,36 @@ def get_container_from_traj_pool(traj_pool, req_dict_rename, req_dict=None):
         container[key_rename] = set_item    # 指针赋值
 
     return container
+
+
+
+def get_seq_container_from_traj_pool(traj_pool, req_dict_rename, req_dict):
+    container = {}
+    assert len(req_dict_rename) == len(req_dict)
+
+    # replace 'obs' to 'obs > xxxx'
+    for key_index, key in enumerate(req_dict):
+        key_name =  req_dict[key_index]
+        key_rename = req_dict_rename[key_index]
+        if not hasattr(traj_pool[0], key_name):
+            real_key_list = [real_key for real_key in traj_pool[0].__dict__ if (key_name+'>' in real_key)]
+            assert len(real_key_list) > 0, ('check variable provided!', key, key_index)
+            for real_key in real_key_list:
+                mainkey, subkey = real_key.split('>')
+                req_dict.append(real_key)
+                req_dict_rename.append(key_rename+'>'+subkey)
+    big_batch_size = -1  # vector should have same length, check it!
+    
+    # load traj into a 'container'
+    for key_index, key in enumerate(req_dict):
+        key_name =  req_dict[key_index]
+        key_rename = req_dict_rename[key_index]
+        if not hasattr(traj_pool[0], key_name): continue
+        set_item = np.array([getattr(traj, key_name) for traj in traj_pool], axis=0)
+        if not (big_batch_size==set_item.shape[0] or (big_batch_size<0)):
+            print('error')
+        assert big_batch_size==set_item.shape[0] or (big_batch_size<0), (key,key_index)
+        big_batch_size = set_item.shape[0]
+        container[key_rename] = set_item    # 指针赋值
+
+    return container
