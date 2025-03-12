@@ -65,7 +65,7 @@ class wasd_xy_Trainer():
         self.logs = []
         self.mcv = AlgorithmConfig.mcom
         self.trivial_dict = {}
-        self.smooth_trivial_dict = None
+        self.smooth_trivial_dict = {}
 
 
 

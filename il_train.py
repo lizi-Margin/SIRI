@@ -84,7 +84,7 @@ def train_on(traj_dir, N_LOAD=2000):
             trainer.train_on_data_(data)
             # time.sleep(5)
         del datas
-        # del pool
+        del pool
 
 
 if __name__ == '__main__':
