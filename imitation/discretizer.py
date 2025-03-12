@@ -2,6 +2,7 @@ import numpy as np
 import gymnasium.spaces as spaces
 from typing import Union, List
 from siri.utils.logger import lprint
+from .filter import mouse_filter, mouse_pos_filter
 
 class wasd_Discretizer():
     """
@@ -54,7 +55,7 @@ class wasd_Discretizer():
 
 
 class SimpleDiscretizer:
-    def __init__(self, box):
+    def __init__(self, box, **FILTER):
         if isinstance(box, list):
             box = np.array(box)
         assert isinstance(box, np.ndarray)
@@ -62,6 +63,7 @@ class SimpleDiscretizer:
         assert len(box.shape) == 1
         self.box = box
         self.n_actions = len(box)
+        self.filter = mouse_filter(**FILTER)
 
     def index_to_action_(self, index: int):
         if index < 0 or index >= self.n_actions:
@@ -70,6 +72,7 @@ class SimpleDiscretizer:
 
     def discretize_(self, continuous):
         assert isinstance(continuous, (int, float, np.float32, np.float64))
+        continuous = self.filter.step(continuous)
         diffs = np.abs(self.box - continuous)
         return np.argmin(diffs).astype(np.int32)
     

@@ -10,6 +10,7 @@ from siri.vision.preprocess import crop
 from UTIL.colorful import *
 from .traj import trajectory
 from .utils import safe_dump_traj_pool
+from .filter import mouse_filter, mouse_pos_filter
 
 
 # Define keys and mouse buttons to track
@@ -77,13 +78,17 @@ class Grabber(ScrGrabber):
         self.traj_pool: list[trajectory] = []
         self.tick = 0.1
         self.traj_limit = 200
-        self.sz = 640
         lprint(self, f"traj time limit: {self.tick * self.traj_limit}")
+
+        self.x_filter = mouse_pos_filter()
+        self.y_filter = mouse_pos_filter(D_MAX=200)
     
     def new_traj(self):
         # Create trajectory storage
         traj = trajectory(traj_limit=self.traj_limit, env_id=0)
         global last_mouse_pos; last_mouse_pos = None
+        self.x_filter.reset()
+        self.y_filter.reset()
         return traj
 
     def start_dataset_session(self):
@@ -153,18 +158,21 @@ class Grabber(ScrGrabber):
                     # frame = cv2.resize(frame, (self.sz, self.sz,))
                     # traj.remember('FRAME_cropped', frame.copy())
 
-                    if (new_mouse_pos is not None) and (last_mouse_pos is not None):
-                        mouse_movement = new_mouse_pos - last_mouse_pos
-                        mouse_movement = mouse_movement.astype(np.float32)
+                    if (new_mouse_pos is not None):
                         last_mouse_pos = new_mouse_pos
+                        mouse_movement = np.zeros(2, dtype=np.float32)
+
+                        mouse_movement[0] = self.x_filter.step(new_mouse_pos[0])
+                        mouse_movement[1] = self.y_filter.step(new_mouse_pos[1])
+                        mouse_movement = mouse_movement.astype(np.float32)
                     else: 
                         mouse_movement = np.array([0., 0.], dtype=np.float32)
                         lprint(self, "Warning: new_mouse_pos is None")
                     act = np.array(list(actions.values()), dtype=np.float32)
-                    if act.any():
-                        print(actions)
-                    # if mouse_movement.any():
-                    #     print(mouse_movement)
+                    # if act.any():
+                    #     print(actions)
+                    if np.max(np.abs(mouse_movement), axis=None) > 50:
+                        print(mouse_movement, last_mouse_pos)
                     traj.remember('key', act)
                     traj.remember('mouse', mouse_movement.copy())
                     traj.time_shift()
@@ -177,7 +185,7 @@ class Grabber(ScrGrabber):
             GloablStatus.monitor = None
             GloablStatus.stop_event.set()
             for i in range(len(self.traj_pool)): self.traj_pool[i].cut_tail()
-            pool_name = f"{self.__class__.__name__}-tick={self.tick}-limit={self.traj_limit}-sz={self.sz}-{time.strftime("%Y%m%d-%H:%M:%S")}"
+            pool_name = f"{self.__class__.__name__}-tick={self.tick}-limit={self.traj_limit}-{time.strftime("%Y%m%d-%H:%M:%S")}"
             safe_dump_traj_pool(self.traj_pool, pool_name)
             print亮黄(lprint_(self, "terminated"))
 

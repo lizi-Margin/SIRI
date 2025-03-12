@@ -218,7 +218,7 @@ class StateMachine:
             self.model_tick = 0.1
             self.model = NetActor(LSTMNet).to('cuda')
             self.model.load_model("./imitation_TRAIN/BC/model.pt")
-            self.model.train(False)
+            self.model.eval()
             self.model.net.reset()
 
         self._fire_start_t_ = None
@@ -430,10 +430,13 @@ class StateMachine:
         if (not in_chase) and (not in_search) and is_pressing():
             unpress_kb_bt()
         
+        if need_slp:
+            mv_x, mv_y = mv_x/2, mv_y/2
+            move_mouse(mv_x, mv_y)
+            slp.sleep()
         move_mouse(mv_x, mv_y)
 
-        if need_slp:
-            slp.sleep()
+        
 
         act_dict['mv_xy'] = (mv_x, mv_y,)
         act_dict['fire'] = 1 if (self._fire_start_t_ is not None) else 0
