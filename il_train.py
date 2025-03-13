@@ -57,6 +57,12 @@ def get_data(traj_pool):
     index_mouse_y = y_discretizer.discretize(act_mouse_y)
     index_wasd = wasd_discretizer.action_to_index(act_wasd)
 
+    if isinstance(frame_center, (tuple, list,)):
+        for i in range(len(frame_center)):
+            frame_center[i] = frame_center[i].to('cpu')
+    else:
+        frame_center = frame_center.to('cpu')
+
     data = {
         'obs': frame_center, 
 
@@ -69,7 +75,7 @@ def get_data(traj_pool):
 
 
 def train_on(traj_dir, N_LOAD=2000):
-    n_traj = 20
+    n_traj = 40
     traj_reuse = 2
     for i in range(N_LOAD):
         decoration = "_" * 20
@@ -82,11 +88,12 @@ def train_on(traj_dir, N_LOAD=2000):
             data = copy.copy(datas[j%n_traj])
             print_dict(data)
             trainer.train_on_data_(data)
-            # time.sleep(5)
         del datas
         del pool
 
 
 if __name__ == '__main__':
-    train_on('traj-Grabber-tick=0.1-limit=200-old', N_LOAD=12)
-    train_on('traj-Grabber-tick=0.1-limit=200-pure')
+    # train_on('traj-Grabber-tick=0.1-limit=200-nav', N_LOAD=2)
+    # train_on('traj-Grabber-tick=0.1-limit=200-old', N_LOAD=12)
+    # train_on('traj-Grabber-tick=0.1-limit=200-pure')
+    train_on('traj-Grabber-tick=0.1-limit=200-nav')

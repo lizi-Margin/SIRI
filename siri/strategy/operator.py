@@ -204,23 +204,8 @@ class Aimer:
         return norm(self.last_output[0], -200., 200.), norm(self.last_output[1], -200., 200.)
 
 
-class StateMachine:
+class StateMachineBase:
     def __init__(self):
-        self.aimer = Aimer()
-        self.kb_sm_lesure = KBStateMachine()
-        self.kb_sm_fight = KBStateMachine()
-        self.kb_sm_lesure.add_key('4', '5', '6')
-        self.kb_sm_fight.add_key('g')
-
-        self.USE_MODEL = True
-        if self.USE_MODEL:
-            from imitation.net import NetActor, LSTMNet
-            self.model_tick = 0.1
-            self.model = NetActor(LSTMNet).to('cuda')
-            self.model.load_model("./imitation_TRAIN/BC/model.pt")
-            self.model.eval()
-            self.model.net.reset()
-
         self._fire_start_t_ = None
         self._last_fire_end_t_ = -100.
 
@@ -259,6 +244,59 @@ class StateMachine:
     @property
     def _last_detect_t(self):
         return time.time() - self._last_detect_end_t_
+  
+    def step(self, obs: dict):
+        act = {}
+        return act
+
+                        
+    def _start_scope(self):
+        self._scope_start_t_ = time.time()
+        mouse.click(Button.right)
+
+    def _start_fire(self):
+        self._fire_start_t_ = time.time()
+        mouse.press(Button.left)
+        # lprint(self, "_start_fire")
+
+    def _start_search(self):
+        self._search_start_t_ = time.time()
+        lprint(self, "_start_search")
+    
+    def _end_scope(self):
+        mouse.click(Button.right)
+        self._scope_start_t_ = None
+                
+    def _end_fire(self):
+        mouse.release(Button.left)
+        self._fire_start_t_ = None
+        self._last_fire_end_t_ = time.time()
+
+    def _end_search(self):
+        self._search_start_t_ = None
+        self._last_search_end_t_ = time.time()
+        unpress_kb_bt()
+        lprint(self, "_end_search")
+
+
+class StateMachine(StateMachineBase):
+    def __init__(self):
+        super(StateMachine, self).__init__()
+        self.aimer = Aimer()
+        self.kb_sm_lesure = KBStateMachine()
+        self.kb_sm_fight = KBStateMachine()
+        self.kb_sm_lesure.add_key('4', '5', '6')
+        self.kb_sm_fight.add_key('g')
+
+        self.USE_MODEL = True
+        if self.USE_MODEL:
+            from imitation.net import NetActor, LSTMNet
+            self.model_tick = 0.1
+            self.model = NetActor(LSTMNet).to('cuda')
+            self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-sample=50-pretrained-13856-augft.pt")
+            self.model.eval()
+            self.model.net.reset()
+
   
     def step(self, obs: dict):
         assert 'in_scope' in obs
@@ -448,34 +486,200 @@ class StateMachine:
         }
 
 
-                        
-    def _start_scope(self):
-        self._scope_start_t_ = time.time()
-        mouse.click(Button.right)
 
-    def _start_fire(self):
-        self._fire_start_t_ = time.time()
-        mouse.press(Button.left)
-        # lprint(self, "_start_fire")
 
-    def _start_search(self):
-        self._search_start_t_ = time.time()
-        lprint(self, "_start_search")
-    
-    def _end_scope(self):
-        mouse.click(Button.right)
-        self._scope_start_t_ = None
+class AgentStateMachine(StateMachineBase):
+    def __init__(self):
+        super(AgentStateMachine, self).__init__()
+        self.aimer = Aimer()
+        self.kb_sm_lesure = KBStateMachine()
+        self.kb_sm_fight = KBStateMachine()
+        self.kb_sm_lesure.add_key('4', '5', '6')
+        self.kb_sm_fight.add_key('g')
+
+
+        from imitation.net import NetActor, LSTMNet
+        self.model_tick = 0.1
+        self.model = NetActor(LSTMNet).to('cuda')
+        self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000.pt")
+        self.model.eval()
+        self.model.net.reset()
+
+        self.in_press = {
+            'w': 0,
+            'a': 0,
+            's': 0,
+            'd': 0,
+        }
+
+
+    def step(self, obs: dict):
+        assert 'in_scope' in obs
+        assert 'deep_frame' in obs
+        no_target = (not 'xy' in obs)
+        deep_frame = obs['deep_frame']
+        frame = obs['frame']
+        f = obs['f']
+        l = obs['l']
+        r = obs['r']
+        obs_dict = {
+            'in_scope': 1 if obs['in_scope'] else 0,
+            'xy': (0, 0,) if no_target else obs['xy'],
+            'deep_frame': obs['deep_frame'],
+            'f': f,
+            'l': l,
+            'r': r
+        }
+
+        act_dict = {
+            'mv_xy': (0, 0,),
+            'fire': 0,
+            'scope': 0,
+            'w': 0,
+            'a': 0,
+            's': 0,
+            'd': 0,
+            '4': 0,
+            '5': 0,
+            '6': 0,
+            'g': 0
+        }
+
+        if self._last_detect_t > 15:
+            SEARCH_T = 100.
+            SEARCH_W_T = 0.5
+        else:
+            SEARCH_T = 100.
+            SEARCH_W_T = 0.5
+
+        rand_int = random.uniform(-1, 1)
+
+        if (self._scope_start_t_ is not None) != obs['in_scope']:
+            self._scope_unsync_cnt_ += 1
+            if self._scope_unsync_cnt_ > 15:
+                mouse.click(Button.right)
+                self._scope_unsync_cnt_ = 0
+        else:
+            self._scope_unsync_cnt_ = 0
+
+        if (self._fire_start_t_ is not None) and self._fire_t > 0.6:
+            self._end_fire()
+
+        if (self._scope_start_t_ is not None)\
+           and ((self._scope_t > 4.) or ((self._last_fire_t > 1.) and no_target and (self._scope_t > 1.)))\
+           and self._fire_start_t_ is None:
+            self._end_scope()
+
+        in_search = False
+        in_chase = False
+        need_slp = False
+
+        if no_target or True:
+            self.aimer.pid.reset()
+            ex, ey = self.aimer.calc_error(*GloablStatus.in_window_center_xy())
+            mv_x, mv_y = self.aimer.calc_movement(ex, ey, False)
+            if random.uniform(0, 1) < 0.02:
+                act_dict = self.kb_sm_lesure.step(act_dict)
+
+            if self._last_fire_t > 1 and self._last_search_t > SEARCH_W_T:
+                assert self.model_tick > cfg.tick
+                slp = Sleeper(tick = self.model_tick - cfg.tick)
+                need_slp = True
+
+                in_search = True
+                if self._search_start_t_ is None:
+                    self._start_search()
+                    self.model.net.reset()
                 
-    def _end_fire(self):
-        mouse.release(Button.left)
-        self._fire_start_t_ = None
-        self._last_fire_end_t_ = time.time()
+                wasd, xy = self.model.act([frame])
+                limit = 500
+                mv_x, mv_y = norm(xy[0], lower_side=-limit, upper_side=limit), norm(xy[1], lower_side=-limit, upper_side=limit)
+                if wasd[0] > 0:
+                    act_dict['w'] = 1
+                elif wasd[1] > 0:
+                    act_dict['a'] = 1
+                elif wasd[2] > 0:
+                    act_dict['s'] = 1
+                elif wasd[3] > 0:
+                    act_dict['d'] = 1
+           
+            # else:
+            #     if self._last_search_t > SEARCH_W_T/2 and self._last_detect_t > 4:
+            #         mv_x = -130 if int(self._last_detect_end_t_) % 2 == 0 else 130
+            #         mv_x += rand_int * 20
 
-    def _end_search(self):
-        self._search_start_t_ = None
-        self._last_search_end_t_ = time.time()
-        unpress_kb_bt()
-        lprint(self, "_end_search")
+
+        
+        else:
+            self._last_detect_end_t_ = time.time()
+
+            w, h = obs['wh']; assert w > 0 and h > 0
+            ex, ey = self.aimer.calc_error(*obs['xy'])
+            inbound = (abs(ex) < w and abs(ey) < h)
+            mv_x, mv_y = self.aimer.calc_movement(ex, ey, inbound)
+            if self._fire_start_t_ is not None:
+                mv_y += 1.
+
+            
+            if inbound:
+                if self._scope_start_t_ is not None:
+                    if self._fire_start_t_ is None:
+                        self._start_fire()
+                elif max(abs(w), abs(h)) > 150 :
+                    if (self._fire_start_t_ is None) or self._fire_t > 0.2:
+                        self._start_fire()
+                elif max(abs(w), abs(h)) > 80:
+                    if self._scope_start_t_ is None:
+                        self._scope_start_t_ = time.time()
+                        mouse.click(Button.right)
+
+                    if self._fire_start_t_ is None and time.time() - self._scope_start_t_ > 1.:
+                        self._start_fire()
+                else:
+                    in_chase = True
+                    act_dict['w'] = 1
+            else:
+                in_chase = True
+                act_dict['w'] = 1
+            
+            if in_chase and random.uniform(0, 1) < 0.08:
+                    act_dict = self.kb_sm_fight.step(act_dict)
+
+        
+        if (not in_search or self._search_t > SEARCH_T)and self._search_start_t_ is not None:
+            self._end_search()
+        
+        # if (not in_chase) and (not in_search) and is_pressing():
+        #     unpress_kb_bt()
+        
+
+        for k in ['w', 'a', 's', 'd']:
+            if act_dict[k] > 0:
+                if self.in_press[k] <= 0: 
+                    KB.kb.press(k)
+                    self.in_press[k] = 1
+            else: 
+                if self.in_press[k] > 0:
+                    KB.kb.release(k)
+                    self.in_press[k] = 0
+                
+        if need_slp:
+            mv_x, mv_y = mv_x/2, mv_y/2
+            move_mouse(mv_x, mv_y)
+            slp.sleep()
+        move_mouse(mv_x, mv_y)
+
+        
+
+        act_dict['mv_xy'] = (mv_x, mv_y,)
+        act_dict['fire'] = 1 if (self._fire_start_t_ is not None) else 0
+        act_dict['scope'] = 1 if (self._scope_start_t_ is not None) else 0
+
+        return {
+            'obs': obs_dict,
+            'act': act_dict
+        }
+
 
 class KBStateMachine:
     def __init__(self):
@@ -505,7 +709,7 @@ class Operator(threading.Thread):
         self.obs_ready_mutex = threading.Semaphore(value=0)
         self.draw_action_hook = draw_action_hook
 
-        self.sm = StateMachine()
+        self.sm = AgentStateMachine()
 
         self.start_time = time.time()
         

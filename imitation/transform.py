@@ -37,7 +37,7 @@ center_transform_train = Compose(
         transforms.RandomErasing(p=0.8, scale=(0.003, 0.003), ratio=(0.3, 0.3)),
         transforms.RandomErasing(p=0.8, scale=(0.003, 0.003), ratio=(0.3, 0.3)),
         transforms.RandomErasing(p=0.8, scale=(0.003, 0.003), ratio=(0.3, 0.3)),
-        # transforms.ColorJitter(brightness=0.05, contrast=0.05, saturation=0.05, hue=0.01),
+        transforms.ColorJitter(brightness=0.05, contrast=0.05, saturation=0.05, hue=0.01),
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
     ]
 )

@@ -1,7 +1,7 @@
 import os
 import copy
 import torch
-import shutil
+import shutil, random
 import numpy as np
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
@@ -29,9 +29,10 @@ class AlgorithmConfig:
     sample_size = 50
 
     # behavior cloning part
-    # lr = 0.02 
-    lr = 0.005 
-    lr_sheduler_min_lr = 0.0008
+    lr = 0.01 
+    lr_sheduler_min_lr = 0.004
+    # lr = 0.005 
+    # lr_sheduler_min_lr = 0.0008
     lr_sheduler = True  # whether to use lr_sheduler
     num_epoch_per_update = 16
     beta_base = 0.
@@ -56,10 +57,16 @@ class wasd_xy_Trainer():
 
         self.sheduler = None
         if AlgorithmConfig.lr_sheduler:
-            def linear_decay(epoch):
-                coef = max(1. - epoch/1000, 0.)
-                return max(coef, AlgorithmConfig.lr_sheduler_min_lr/AlgorithmConfig.lr)
-            self.sheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=linear_decay)
+            # def linear_decay(epoch):
+            #     coef = max(1. - epoch/1000, 0.)
+            #     return max(coef, AlgorithmConfig.lr_sheduler_min_lr/AlgorithmConfig.lr)
+            def linear_decay_and_jump(epoch):
+                coef = max(1. - epoch/5000, 0.)
+                min_coef = AlgorithmConfig.lr_sheduler_min_lr/AlgorithmConfig.lr
+                if coef <= min_coef:
+                    coef = min_coef + max(0, float(np.sin(epoch/100))) * (1-min_coef) * 0.35
+                return coef
+            self.sheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=linear_decay_and_jump)
 
         self.epoch_cnt = 0
         self.logs = []
@@ -191,7 +198,7 @@ class wasd_xy_Trainer():
             self.trivial_dict[key] = self.trivial_dict[key].mean()
             print_buf.append(' %s:%.3f, '%(key, self.trivial_dict[key]))
             if self.mcv is not None:  
-                alpha = 0.8
+                alpha = 0.98
                 if key in self.smooth_trivial_dict:
                     self.smooth_trivial_dict[key] = alpha*self.smooth_trivial_dict[key] + (1-alpha)*self.trivial_dict[key]
                 else:
