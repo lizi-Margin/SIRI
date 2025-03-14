@@ -13,7 +13,7 @@ class GlobalConfig:
     root_dir = get_root_dir()
 
     device = 'cuda:0'
-    conf_threshold = 0.25
+    conf_threshold = 0.33
     half = True
     tick = 0.04
     # tick = 0.05
@@ -26,6 +26,8 @@ class GlobalConfig:
     body_y_offset = 0.1
 
     plt = 'qt'
+
+    yolo_plt = False
 
 class GloablStatus:
     monitor = None

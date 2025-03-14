@@ -108,8 +108,7 @@ class Grabber(ScrGrabber):
             "height": scr_height,
         }
 
-        traj = self.new_traj()
-
+        
 
         # Initialize listeners
         self.keyboard_listener = keyboard.Listener(on_press=on_key_press, on_release=on_key_release)
@@ -120,38 +119,49 @@ class Grabber(ScrGrabber):
         
         try:
             with mss.mss() as sct:
+                def grab_screen():
+                    screenshot = sct.grab(GloablStatus.monitor)
+                    frame = np.array(screenshot)
+                    if frame.shape[-1] == 4:
+                        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                    assert frame.shape[-1] == 3, 'not a BGR format'
+                    return frame, time.time_ns()
+
+                traj = self.new_traj()
+                self.last_frame, self.last_frame_time = grab_screen()
+                time.sleep(self.tick)
+
+
                 global start, stop, new_mouse_pos, last_mouse_pos, actions
                 stop = 1
                 while True:
                     if stop:
-                        if traj.time_pointer > 0:
-                            self.traj_pool.append(traj)
-                            traj = self.new_traj()
                         print(end='\n')
                         while not start: 
                             time.sleep(0.25)
                             print靛('\r'+lprint_(self, "paused"), end='')
+                        if traj.time_pointer > 0:
+                            self.traj_pool.append(traj)
+                            traj = self.new_traj()
                         init_actions()
                         new_mouse_pos = None; last_mouse_pos = None
                         stop = 0
+                        
+                        self.last_frame, self.last_frame_time = grab_screen()
+                        time.sleep(self.tick)
                     start = 0
-                    print绿('\r'+lprint_(self, f"started, traj collected: {len(self.traj_pool)}"), end='')
-
-                    sleeper = Sleeper(tick=self.tick, user=self)
 
                     if traj.time_pointer == self.traj_limit:
                         self.traj_pool.append(traj)
                         traj = self.new_traj()
 
 
-
-
-                    screenshot = sct.grab(GloablStatus.monitor)
-                    frame = np.array(screenshot)
-                    if frame.shape[-1] == 4:
-                        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-                    assert frame.shape[-1] == 3, 'not a BGR format'
-                    traj.remember('FRAME_raw', frame.copy())
+                    print绿('\r'+lprint_(self, f"started, traj collected: {len(self.traj_pool)}"), end='')
+                    sleeper = Sleeper(tick=self.tick, user=self)
+                    
+                    assert time.time_ns() - self.last_frame_time < 2 * self.tick * 1e9
+                    traj.remember('FRAME_raw', self.last_frame.copy())
+                    self.last_frame, self.last_frame_time = grab_screen()
 
                     # frame = cv2.resize(frame, cfg.sz_wh)
                     # frame = crop(frame)
@@ -181,6 +191,9 @@ class Grabber(ScrGrabber):
         except KeyboardInterrupt:
             lprint(self, "Sig INT catched, stopping session.")
         finally:
+            if traj.time_pointer > 0:
+                self.traj_pool.append(traj)
+
             # cv2.destroyAllWindows()
             GloablStatus.monitor = None
             GloablStatus.stop_event.set()

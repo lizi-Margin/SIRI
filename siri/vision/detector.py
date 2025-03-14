@@ -391,7 +391,7 @@ class Detector(threading.Thread):
             return True, frame
 
         roi = frame[y_top:y_bottom, x_roi_l:x_roi_r]
-        frame = cv2.rectangle(frame, (x_roi_l, y_top), (x_roi_r, y_bottom), (255, 20, 20), thickness=3)
+        if cfg.yolo_plt: frame = cv2.rectangle(frame, (x_roi_l, y_top), (x_roi_r, y_bottom), (255, 20, 20), thickness=3)
 
 
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
@@ -425,10 +425,11 @@ class Detector(threading.Thread):
                 is_enm = False
 
 
-        mask_visualization = np.ones_like(frame, dtype=np.uint8) * 255
-        selected_mask = mask_enemy if is_enm else mask_friendly
-        mask_visualization[y_top:y_bottom, x_roi_l:x_roi_r] = cv2.merge([selected_mask, selected_mask, selected_mask])
-        frame = cv2.bitwise_and(frame, mask_visualization)
+        if cfg.yolo_plt:
+            mask_visualization = np.ones_like(frame, dtype=np.uint8) * 255
+            selected_mask = mask_enemy if is_enm else mask_friendly
+            mask_visualization[y_top:y_bottom, x_roi_l:x_roi_r] = cv2.merge([selected_mask, selected_mask, selected_mask])
+            frame = cv2.bitwise_and(frame, mask_visualization)
 
 
         # label = "Enemy" if is_enm else "Friendly"
@@ -436,9 +437,10 @@ class Detector(threading.Thread):
         color = (20, 20, 255) if is_enm else (20, 255, 20)
 
         
-        frame = cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=3)
-        # frame = cv2.putText(frame, label, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, thickness=3)
-        frame = cv2.putText(frame, wh_str, (int(x2), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, thickness=1)
+        if cfg.yolo_plt:
+            frame = cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=3)
+            # frame = cv2.putText(frame, label, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, thickness=3)
+            frame = cv2.putText(frame, wh_str, (int(x2), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, thickness=1)
 
         return is_enm, frame
 

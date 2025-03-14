@@ -145,15 +145,16 @@ class Visualizer(threading.Thread):
             target_xy = obs['xy']
             
             # draw target point
-            target_xy = to_int(target_xy)
-            tgt_dot_color = (30, 180, 20,) if not is_zero(target_xy) else (0, 0, 0)
-            frame = cv2.circle(
-                img=frame,
-                center=target_xy,
-                radius=8,
-                color=tgt_dot_color,  # color BGR
-                thickness=-1
-            )
+            if cfg.yolo_plt:
+                target_xy = to_int(target_xy)
+                tgt_dot_color = (30, 180, 20,) if not is_zero(target_xy) else (0, 0, 0)
+                frame = cv2.circle(
+                    img=frame,
+                    center=target_xy,
+                    radius=8,
+                    color=tgt_dot_color,  # color BGR
+                    thickness=-1
+                )
 
 
             ## draw act

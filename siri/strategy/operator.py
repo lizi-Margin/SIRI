@@ -501,7 +501,8 @@ class AgentStateMachine(StateMachineBase):
         from imitation.net import NetActor, LSTMNet
         self.model_tick = 0.1
         self.model = NetActor(LSTMNet).to('cuda')
-        self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000.pt")
+        self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-50000.pt")
+        # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000.pt")
         self.model.eval()
         self.model.net.reset()
 
@@ -547,10 +548,10 @@ class AgentStateMachine(StateMachineBase):
 
         if self._last_detect_t > 15:
             SEARCH_T = 100.
-            SEARCH_W_T = 0.5
+            SEARCH_W_T = 0.3
         else:
             SEARCH_T = 100.
-            SEARCH_W_T = 0.5
+            SEARCH_W_T = 0.3
 
         rand_int = random.uniform(-1, 1)
 
@@ -574,7 +575,7 @@ class AgentStateMachine(StateMachineBase):
         in_chase = False
         need_slp = False
 
-        if no_target or True:
+        if no_target:
             self.aimer.pid.reset()
             ex, ey = self.aimer.calc_error(*GloablStatus.in_window_center_xy())
             mv_x, mv_y = self.aimer.calc_movement(ex, ey, False)
@@ -628,21 +629,12 @@ class AgentStateMachine(StateMachineBase):
                 elif max(abs(w), abs(h)) > 150 :
                     if (self._fire_start_t_ is None) or self._fire_t > 0.2:
                         self._start_fire()
-                elif max(abs(w), abs(h)) > 80:
+                else:
                     if self._scope_start_t_ is None:
                         self._scope_start_t_ = time.time()
                         mouse.click(Button.right)
-
-                    if self._fire_start_t_ is None and time.time() - self._scope_start_t_ > 1.:
-                        self._start_fire()
-                else:
-                    in_chase = True
-                    act_dict['w'] = 1
-            else:
-                in_chase = True
-                act_dict['w'] = 1
             
-            if in_chase and random.uniform(0, 1) < 0.08:
+            if random.uniform(0, 1) < 0.02:
                     act_dict = self.kb_sm_fight.step(act_dict)
 
         
@@ -664,7 +656,10 @@ class AgentStateMachine(StateMachineBase):
                     self.in_press[k] = 0
                 
         if need_slp:
-            mv_x, mv_y = mv_x/2, mv_y/2
+            # coef = 1.4            # mv_x, mv_y = mv_x * coef, mv_y * coef
+            mv_x, mv_y = mv_x/3, mv_y/3
+            move_mouse(mv_x, mv_y)
+            slp.sleep_half()
             move_mouse(mv_x, mv_y)
             slp.sleep()
         move_mouse(mv_x, mv_y)

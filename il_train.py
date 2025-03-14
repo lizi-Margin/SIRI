@@ -88,6 +88,7 @@ def train_on(traj_dir, N_LOAD=2000):
             data = copy.copy(datas[j%n_traj])
             print_dict(data)
             trainer.train_on_data_(data)
+            # time.sleep(5)
         del datas
         del pool
 
@@ -96,4 +97,5 @@ if __name__ == '__main__':
     # train_on('traj-Grabber-tick=0.1-limit=200-nav', N_LOAD=2)
     # train_on('traj-Grabber-tick=0.1-limit=200-old', N_LOAD=12)
     # train_on('traj-Grabber-tick=0.1-limit=200-pure')
-    train_on('traj-Grabber-tick=0.1-limit=200-nav')
+    # train_on('traj-Grabber-tick=0.1-limit=200-nav')
+    train_on('traj-Grabber-tick=0.1-limit=200-frtlnav')

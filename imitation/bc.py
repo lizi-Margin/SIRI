@@ -64,7 +64,7 @@ class wasd_xy_Trainer():
                 coef = max(1. - epoch/5000, 0.)
                 min_coef = AlgorithmConfig.lr_sheduler_min_lr/AlgorithmConfig.lr
                 if coef <= min_coef:
-                    coef = min_coef + max(0, float(np.sin(epoch/100))) * (1-min_coef) * 0.35
+                    coef = min_coef + max(0, float(np.sin(epoch/1000))) * (1-min_coef) * 0.25
                 return coef
             self.sheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=linear_decay_and_jump)
 
