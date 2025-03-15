@@ -38,7 +38,6 @@ class AlgorithmConfig:
     beta_base = 0.
     dist_entropy_loss_coef = 1e-4
     
-
     mcom = get_a_logger()
     
 
