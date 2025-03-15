@@ -49,3 +49,6 @@ __pycache__/
 /Grabber
 /imitation_TRAIN
 /VISUALIZE_logdir
+
+# uml
+*.dot
