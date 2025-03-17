@@ -1,4 +1,4 @@
-import time, numpy as np, cv2, gymnasium.spaces as spaces, copy, torch
+import time, numpy as np, cv2, gymnasium.spaces as spaces, copy, torch, random
 from typing import Union, List
 from siri.utils.logger import lprint
 from imitation.utils import safe_load_traj_pool, safe_dump_traj_pool, print_dict, get_container_from_traj_pool, print_nan, check_nan
@@ -73,9 +73,9 @@ def get_data(traj_pool):
 
     return data
 
-
-def train_on(traj_dir, N_LOAD=2000):
-    n_traj = 40
+def train_on_(traj_dir, N_LOAD=2000):
+    # n_traj = 40
+    n_traj = 1
     traj_reuse = 2
     for i in range(N_LOAD):
         decoration = "_" * 20
@@ -88,14 +88,26 @@ def train_on(traj_dir, N_LOAD=2000):
             data = copy.copy(datas[j%n_traj])
             print_dict(data)
             trainer.train_on_data_(data)
-            # time.sleep(5)
+            time.sleep(5)
         del datas
         del pool
 
+def train_on(traj_dir, N_LOAD=2000):
+    if isinstance(traj_dir, str):
+        train_on_(traj_dir, N_LOAD=N_LOAD)
+    elif isinstance(traj_dir, (list, tuple)):
+        for _ in range(N_LOAD):
+            train_on_(random.choice(traj_dir), N_LOAD=1)
+    else:
+        assert False
 
 if __name__ == '__main__':
     # train_on('traj-Grabber-tick=0.1-limit=200-nav', N_LOAD=2)
     # train_on('traj-Grabber-tick=0.1-limit=200-old', N_LOAD=12)
     # train_on('traj-Grabber-tick=0.1-limit=200-pure')
     # train_on('traj-Grabber-tick=0.1-limit=200-nav')
-    train_on('traj-Grabber-tick=0.1-limit=200-frtlnav')
+    # train_on([
+    #     'traj-Grabber-tick=0.1-limit=200-nav', 
+    #     'traj-Grabber-tick=0.1-limit=200-pp19'
+    # ])
+    train_on('traj-Grabber-tick=0.1-limit=200-pp19')

@@ -500,8 +500,10 @@ class AgentStateMachine(StateMachineBase):
 
         from imitation.net import NetActor, LSTMNet
         self.model_tick = 0.1
-        self.model = NetActor(LSTMNet).to('cuda')
-        self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-50000.pt")
+        self.model = NetActor(LSTMNet).to(cfg.device)
+        self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-20000-frtlnavft-45000-pp19+nav-60000.pt")
+        # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-20000-frtlnavft-40000.pt")
+        # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-45000.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000.pt")
         self.model.eval()
         self.model.net.reset()

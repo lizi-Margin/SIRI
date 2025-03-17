@@ -38,6 +38,7 @@ class Visualizer(threading.Thread):
         self.save_video = f"{self.__class__.__name__}-{time.strftime("%Y%m%d-%H%M%S")}.mp4"
         self.video_writer = None
         self.video_writer_fps = 1/cfg.tick
+        self.last_frame = None
     
     def run(self):
         lprint(self, "start")
@@ -51,13 +52,15 @@ class Visualizer(threading.Thread):
                     if max(len(self.sv_source_queue), len(self.obs_act_data)) > 3:
                         self.sv_source_queue = []
                         self.obs_act_data = []
-                    sleeper.sleep()
-                    continue 
+                    if self.last_frame is None:
+                        sleeper.sleep()
+                        continue
+                else:
+                    sv_source = self.sv_source_queue.pop(0)
+                    obs_act = self.obs_act_data.pop(0)
 
-                sv_source = self.sv_source_queue.pop(0)
-                obs_act = self.obs_act_data.pop(0)
-
-                annotated_frame = self.plot(sv_source, obs_act)
+                    annotated_frame = self.plot(sv_source, obs_act)
+                    self.last_frame = annotated_frame.copy()
 
                 if self.save_video is not None:
                     if self.video_writer is None:

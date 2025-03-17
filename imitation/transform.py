@@ -41,3 +41,5 @@ center_transform_train = Compose(
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
     ]
 )
+
+# center_transform_train = center_transform_test
