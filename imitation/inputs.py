@@ -9,7 +9,7 @@ from siri.utils.logger import lprint, lprint_
 from siri.vision.preprocess import crop
 from UTIL.colorful import *
 from .traj import trajectory
-from .utils import safe_dump_traj_pool
+from .utils import safe_dump_traj_pool, iterable_eq
 from .filter import mouse_filter, mouse_pos_filter
 
 
@@ -125,6 +125,12 @@ class Grabber(ScrGrabber):
                     if frame.shape[-1] == 4:
                         frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
                     assert frame.shape[-1] == 3, 'not a BGR format'
+                    frame_hw = frame.shape[:2]
+                    if not iterable_eq(frame_hw, tuple(reversed(cfg.sz_wh))):
+                        if not hasattr(self, "_sz_noticed"):
+                            self._sz_noticed = True
+                            lprint(self, f"Warning: frame_hw={frame_hw}, resize will be used")
+                        frame = cv2.resize(frame, cfg.sz_wh)
                     return frame, time.time_ns()
 
                 traj = self.new_traj()

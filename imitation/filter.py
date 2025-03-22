@@ -40,7 +40,8 @@ class mouse_pos_filter:
 class mouse_filter:
     DISABLE_FILTER = False
 
-    def __init__(self, MAX=500, D_MAX=400):
+    def __init__(self, MAX=500, D_MAX=400, half=False):
+        self.half = half
         self.last = None
         self.use_last_cnt = 0
 
@@ -76,4 +77,4 @@ class mouse_filter:
 
         
         
-        return continuous
+        return continuous if (not self.half) else continuous/2

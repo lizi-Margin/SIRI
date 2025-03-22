@@ -26,15 +26,15 @@ class AlgorithmConfig:
     logdir = './imitation_TRAIN/BC/'
     device = 'cuda'
     
-    sample_size = 50
+    sample_size = 100
 
     # behavior cloning part
-    lr = 0.01 
-    lr_sheduler_min_lr = 0.004
+    lr = 0.006 
+    lr_sheduler_min_lr = 0.002
     # lr = 0.005 
     # lr_sheduler_min_lr = 0.0008
     lr_sheduler = True  # whether to use lr_sheduler
-    num_epoch_per_update = 16
+    num_epoch_per_update = 4
     beta_base = 0.
     dist_entropy_loss_coef = 1e-4
     
@@ -63,7 +63,7 @@ class wasd_xy_Trainer():
                 coef = max(1. - epoch/5000, 0.)
                 min_coef = AlgorithmConfig.lr_sheduler_min_lr/AlgorithmConfig.lr
                 if coef <= min_coef:
-                    coef = min_coef + max(0, float(np.sin(epoch/1000))) * (1-min_coef) * 0.25
+                    coef = min_coef + max(0, float(np.sin(epoch/500))) * (1-min_coef) * 0.25
                 return coef
             self.sheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=linear_decay_and_jump)
 
@@ -143,11 +143,12 @@ class wasd_xy_Trainer():
         assert self.epoch_cnt%AlgorithmConfig.num_epoch_per_update == 0
         update_cnt = int(self.epoch_cnt/AlgorithmConfig.num_epoch_per_update)
         print(f"update {update_cnt} finished")
-        self.save_model(self.epoch_cnt)
+        # self.save_model(self.epoch_cnt)
         return update_cnt
 
 
-    def save_model(self, update_cnt, info=None):
+    def save_model(self,info=None):
+        # update_cnt = int(self.epoch_cnt/AlgorithmConfig.num_epoch_per_update)
         if not os.path.exists('%s/history_cpt/' % AlgorithmConfig.logdir): 
             os.makedirs('%s/history_cpt/' % AlgorithmConfig.logdir)
 
@@ -160,12 +161,11 @@ class wasd_xy_Trainer():
         }, pt_path)
 
         # dir 2
-        if update_cnt % 20*AlgorithmConfig.num_epoch_per_update == 0 :
-            info = str(update_cnt) if info is None else ''.join([str(update_cnt), '_', info])
-            pt_path2 = '%s/history_cpt/model_%s.pt' % (AlgorithmConfig.logdir, info)
-            shutil.copyfile(pt_path, pt_path2)
+        info = str(self.epoch_cnt) if info is None else ''.join([str(self.epoch_cnt), '_', info])
+        pt_path2 = '%s/history_cpt/model_%s.pt' % (AlgorithmConfig.logdir, info)
+        shutil.copyfile(pt_path, pt_path2)
 
-            print绿('save_model fin')
+        print绿('save_model fin')
     
 
     def load_model(self):

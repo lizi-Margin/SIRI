@@ -2,7 +2,7 @@ import numpy as np
 import gymnasium.spaces as spaces
 from typing import Union, List
 from siri.utils.logger import lprint
-from .filter import mouse_filter, mouse_pos_filter
+from .filter import mouse_filter
 
 class wasd_Discretizer():
     """

@@ -3,12 +3,17 @@ from typing import Union, List
 from siri.utils.logger import lprint
 from imitation.utils import safe_load_traj_pool, safe_dump_traj_pool, print_dict, get_container_from_traj_pool, print_nan, check_nan
 from imitation.discretizer import SimpleDiscretizer, wasd_Discretizer
-from imitation.bc import wasd_xy_Trainer
+
+# from imitation.bc import wasd_xy_Trainer as Trainer
 # from imitation.net import DVNet as Net, DVNet as NetActor
 # from imitation.net import DVNet2 as Net, DVNet2 as NetActor
 # from imitation.net import DVNet3 as Net, DVNet3 as NetActor
 # from imitation.net import DVNet4 as Net, DVNet4 as NetActor
-from imitation.net import LSTMNet as Net, NetActor as NetActor
+# from imitation.net import LSTMNet as Net, NetActor as NetActor
+
+from imitation_full.bc import FullTrainer as Trainer
+from imitation_full.net import LSTMNet as Net, NetActor as NetActor
+
 from siri.vision.preprocess import crop_wh
 
 x_discretizer = NetActor.x_discretizer
@@ -18,8 +23,12 @@ preprocess = NetActor.preprocess
 get_center = NetActor.get_center
 
 CENTER_SZ_WH = NetActor.CENTER_SZ_WH
-policy = Net(CENTER_SZ_WH, wasd_discretizer.n_actions, x_discretizer.n_actions, y_discretizer.n_actions)
-trainer = wasd_xy_Trainer(policy)
+try:
+    policy = Net(CENTER_SZ_WH, wasd_discretizer.n_actions, x_discretizer.n_actions, y_discretizer.n_actions)
+except:
+    policy = Net()
+
+trainer = Trainer(policy)
 trainer.load_model()
 
 def get_data(traj_pool):
@@ -44,6 +53,12 @@ def get_data(traj_pool):
 
     frame_center = preprocess(container['FRAME_center'])
     act_wasd = container['key'][:, :4]
+    index_jump = container['key'][:, 4]
+    index_crouch = container['key'][:, 5]
+    index_reload = container['key'][:, 14]
+    index_r = container['key'][:, 17]
+    index_l = container['key'][:, 16]
+
     act_mouse_x = container['mouse'][:, 0]
     act_mouse_y = container['mouse'][:, 1]
     # print(np.max(act_mouse, axis=0))
@@ -69,14 +84,18 @@ def get_data(traj_pool):
         'wasd': index_wasd,
         'x': index_mouse_x,
         'y': index_mouse_y,
+        'jump': index_jump,
+        'crouch': index_crouch,
+        'reload': index_reload,
+        'r': index_r,
+        'l': index_l
     }
 
     return data
 
 def train_on_(traj_dir, N_LOAD=2000):
-    # n_traj = 40
-    n_traj = 1
-    traj_reuse = 2
+    n_traj = 40
+    traj_reuse = 4
     for i in range(N_LOAD):
         decoration = "_" * 20
         print(decoration + f" load{i} starts, traj_dir={traj_dir} " + decoration)
@@ -87,10 +106,11 @@ def train_on_(traj_dir, N_LOAD=2000):
         for j in range(n_traj * traj_reuse):
             data = copy.copy(datas[j%n_traj])
             print_dict(data)
-            trainer.train_on_data_(data)
-            time.sleep(5)
+            try:trainer.train_on_data_(data)
+            except torch.OutOfMemoryError: continue
         del datas
         del pool
+        trainer.save_model()
 
 def train_on(traj_dir, N_LOAD=2000):
     if isinstance(traj_dir, str):
@@ -110,4 +130,4 @@ if __name__ == '__main__':
     #     'traj-Grabber-tick=0.1-limit=200-nav', 
     #     'traj-Grabber-tick=0.1-limit=200-pp19'
     # ])
-    train_on('traj-Grabber-tick=0.1-limit=200-pp19')
+    train_on('traj-Grabber-tick=0.1-limit=200-fight-pp19')
