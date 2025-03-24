@@ -20,7 +20,7 @@ y_box = [50, 25, 12.5, 5]; y_box = np.array(y_box + [0] + (-1 * np.array(list(re
 Y_MAX=300
 Y_D_MAX=200
 
-from imitation.transform import center_transform_train, center_transform_test
+from imitation.transform import center_transform_train, center_transform_test, center_transform_train_f
 
 def load_model(m, pt_path, device='cuda'):
     if not os.path.exists(pt_path): 
@@ -32,7 +32,7 @@ def load_model(m, pt_path, device='cuda'):
     return m
 
 class NetActor(nn.Module):
-    _showed = False
+    _showed = True
 
     x_discretizer = SimpleDiscretizer(x_box)
     y_discretizer = SimpleDiscretizer(y_box, MAX=Y_MAX, D_MAX=Y_D_MAX)
@@ -43,7 +43,6 @@ class NetActor(nn.Module):
     @classmethod
     def preprocess(cls, im: Union[np.ndarray, List[np.ndarray]], train=True) -> torch.Tensor: # to('cuda')
         assert len(im[0].shape) == 3 and im[0].shape[-1] == 3, "im shape should be (n, h, w, 3)"
-
         def trans(image):
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             transform = center_transform_train if train else center_transform_test
@@ -51,6 +50,10 @@ class NetActor(nn.Module):
             assert image.shape[0] == 3
             return image
         im = [trans(img) for img in im]
+        # if train:
+        #     im = torch.stack(im).to('cpu').float()
+        # else:
+        #     im = torch.stack(im).to('cuda').float()
         im = torch.stack(im).to('cuda').float()
         if not cls._showed:
             for i in range(5):
@@ -83,7 +86,7 @@ class NetActor(nn.Module):
         frame_centers = np.array([self.get_center(f.copy()) for f in frames])
         frame_centers = self.preprocess(frame_centers, train=False)
         index = self._act(frame_centers)
-        index = (int(x[0]) for x in index)
+        index = tuple(int(x[0]) for x in index)
         index_wasd, index_x, index_y = index[0], index[1], index[2]
         wasd = self.wasd_discretizer.index_to_action_(index_wasd)
         x = self.x_discretizer.index_to_action_(index_x)
@@ -91,7 +94,7 @@ class NetActor(nn.Module):
         return wasd, np.array([x, y])
     
     def load_model(self, path):
-        self.net = load_model(self.net, path, device='cuda')
+        load_model(self, path, device='cuda')
 
 
 

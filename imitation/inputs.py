@@ -34,8 +34,8 @@ new_mouse_pos = None
 
 start = 0
 stop = 0
-start_char = 'j'
-stop_char = 'k'
+start_char = 'z'
+stop_char = 'x'
 
 def on_key_press(key):
     if hasattr(key, 'char'):

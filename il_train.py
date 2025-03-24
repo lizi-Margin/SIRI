@@ -1,8 +1,10 @@
 import time, numpy as np, cv2, gymnasium.spaces as spaces, copy, torch, random
-from typing import Union, List
-from siri.utils.logger import lprint
+import multiprocessing as mp
+# from typing import Union, List
+# from siri.utils.logger import lprint
 from imitation.utils import safe_load_traj_pool, safe_dump_traj_pool, print_dict, get_container_from_traj_pool, print_nan, check_nan
-from imitation.discretizer import SimpleDiscretizer, wasd_Discretizer
+# from imitation.discretizer import SimpleDiscretizer, wasd_Discretizer
+from UTIL.colorful import *
 
 # from imitation.bc import wasd_xy_Trainer as Trainer
 # from imitation.net import DVNet as Net, DVNet as NetActor
@@ -19,8 +21,7 @@ from siri.vision.preprocess import crop_wh
 x_discretizer = NetActor.x_discretizer
 y_discretizer = NetActor.y_discretizer
 wasd_discretizer = NetActor.wasd_discretizer
-preprocess = NetActor.preprocess
-get_center = NetActor.get_center
+
 
 CENTER_SZ_WH = NetActor.CENTER_SZ_WH
 try:
@@ -30,6 +31,10 @@ except:
 
 trainer = Trainer(policy)
 trainer.load_model()
+preprocess = NetActor.preprocess
+get_center = NetActor.get_center
+
+old_dataset_legacy = False
 
 def get_data(traj_pool):
     req_dict_name = ['key', 'mouse', 'FRAME_raw']
@@ -41,7 +46,6 @@ def get_data(traj_pool):
     container = get_container_from_traj_pool(traj_pool, req_dict_name, req_dict_name)
     print_dict(container)
 
-
     container['FRAME_center'] = np.array([get_center(frame.copy()) for frame in container['FRAME_raw']])
     # frame = container['FRAME_center'][0]
     # print(frame.shape)
@@ -50,8 +54,8 @@ def get_data(traj_pool):
     # cv2.destroyAllWindows()
 
 
-
-    frame_center = preprocess(container['FRAME_center'])
+    # frame_center = preprocess(container['FRAME_center'], train=True)
+    frame_center = container['FRAME_center']
     act_wasd = container['key'][:, :4]
     index_jump = container['key'][:, 4]
     index_crouch = container['key'][:, 5]
@@ -59,8 +63,12 @@ def get_data(traj_pool):
     index_r = container['key'][:, 17]
     index_l = container['key'][:, 16]
 
-    act_mouse_x = container['mouse'][:, 0]
-    act_mouse_y = container['mouse'][:, 1]
+    if old_dataset_legacy:
+        act_mouse_x = container['mouse'][:, 0]   /2 # !!!
+        act_mouse_y = container['mouse'][:, 1]   /2 # !!!
+    else:
+        act_mouse_x = container['mouse'][:, 0]
+        act_mouse_y = container['mouse'][:, 1]
     # print(np.max(act_mouse, axis=0))
     # print(np.min(act_mouse, axis=0))
     # print(np.mean(act_mouse, axis=0))
@@ -72,11 +80,11 @@ def get_data(traj_pool):
     index_mouse_y = y_discretizer.discretize(act_mouse_y)
     index_wasd = wasd_discretizer.action_to_index(act_wasd)
 
-    if isinstance(frame_center, (tuple, list,)):
-        for i in range(len(frame_center)):
-            frame_center[i] = frame_center[i].to('cpu')
-    else:
-        frame_center = frame_center.to('cpu')
+    # if isinstance(frame_center, (tuple, list,)):
+    #     for i in range(len(frame_center)):
+    #         frame_center[i] = frame_center[i].to('cpu')
+    # else:
+    #     frame_center = frame_center.to('cpu')
 
     data = {
         'obs': frame_center, 
@@ -93,33 +101,69 @@ def get_data(traj_pool):
 
     return data
 
-def train_on_(traj_dir, N_LOAD=2000):
-    n_traj = 40
-    traj_reuse = 4
-    for i in range(N_LOAD):
-        decoration = "_" * 20
-        print(decoration + f" load{i} starts, traj_dir={traj_dir} " + decoration)
-        load = safe_load_traj_pool(traj_dir=traj_dir)
-        # load = safe_load_traj_pool(traj_dir='traj-Grabber-tick=0.1-limit=200-pure')
-        pool = load(n_samples=n_traj)
-        datas = [get_data([traj]) for traj in pool]
-        for j in range(n_traj * traj_reuse):
-            data = copy.copy(datas[j%n_traj])
-            print_dict(data)
-            try:trainer.train_on_data_(data)
-            except torch.OutOfMemoryError: continue
-        del datas
-        del pool
-        trainer.save_model()
-
-def train_on(traj_dir, N_LOAD=2000):
+def data_loader_process(traj_dir, n_traj, queue):
+    print蓝("[data_loader_process] started")
     if isinstance(traj_dir, str):
-        train_on_(traj_dir, N_LOAD=N_LOAD)
+        print蓝(f"[data_loader_process] single traj_dir mode: {traj_dir}")
+        load = safe_load_traj_pool(traj_dir=traj_dir)
+        while True:
+            qsz = queue.qsize()
+            while qsz >= 1:
+                print蓝(f"[data_loader_process] waiting, queue.qsize()={qsz}")
+                time.sleep(1)
+                qsz = queue.qsize()
+            print蓝(f"[data_loader_process] start loading: {traj_dir}")
+            pool = load(n_samples=n_traj)
+            datas = []
+            for traj in pool:
+                datas.append(get_data([traj]))
+            print蓝(f"[data_loader_process] load completed")
+            queue.put_nowait((datas, traj_dir,)) 
+            del pool
     elif isinstance(traj_dir, (list, tuple)):
-        for _ in range(N_LOAD):
-            train_on_(random.choice(traj_dir), N_LOAD=1)
+        print蓝(f"[data_loader_process] multiple traj_dir mode: {traj_dir}")
+        itr = 0
+        while True:
+            this_traj_dir = traj_dir[itr % len(traj_dir)]
+            print蓝(f"[data_loader_process] start loading: {this_traj_dir}")
+            load = safe_load_traj_pool(traj_dir=this_traj_dir)
+            pool = load(n_samples=n_traj)
+            datas = [get_data([traj]) for traj in pool]
+            print蓝(f"[data_loader_process] load completed")
+            queue.put((datas, this_traj_dir,)) 
+            del pool
+            itr += 1
     else:
         assert False
+
+
+
+def train_on(traj_dir, N_LOAD=2000):
+    n_traj = 20
+    traj_reuse = 2
+    # torch.rand(1)
+    queue = mp.Queue(maxsize=2)
+    loader_process = mp.Process(target=data_loader_process, args=(traj_dir, n_traj, queue), daemon=True)
+    loader_process.start()
+
+    for i in range(N_LOAD):
+        decoration = "_" * 20
+        datas, dir_name = queue.get()  # wait
+        print(decoration + f" train N_LOAD={i} starts, traj_dir={dir_name} " + decoration)
+
+        for j in range(n_traj * traj_reuse):
+            data = copy.copy(datas[j % n_traj])
+            data['obs'] = preprocess(data['obs'])
+            print_dict(data)
+            try:
+                trainer.train_on_data_(data)
+            except torch.OutOfMemoryError:
+                continue
+        
+        del datas
+        trainer.save_model()
+    loader_process.terminate()
+
 
 if __name__ == '__main__':
     # train_on('traj-Grabber-tick=0.1-limit=200-nav', N_LOAD=2)
@@ -130,4 +174,15 @@ if __name__ == '__main__':
     #     'traj-Grabber-tick=0.1-limit=200-nav', 
     #     'traj-Grabber-tick=0.1-limit=200-pp19'
     # ])
+    
+    
+    # old_dataset_legacy = True
+    # train_on([
+    #     'traj-Grabber-tick=0.1-limit=200-pp19',
+    #     'traj-Grabber-tick=0.1-limit=200-nav',
+    #     'traj-Grabber-tick=0.1-limit=200-pure',
+    #     'traj-Grabber-tick=0.1-limit=200-old',
+    # ], N_LOAD=15)
+
+    old_dataset_legacy = False
     train_on('traj-Grabber-tick=0.1-limit=200-fight-pp19')

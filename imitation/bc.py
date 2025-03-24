@@ -29,10 +29,10 @@ class AlgorithmConfig:
     sample_size = 100
 
     # behavior cloning part
-    lr = 0.006 
-    lr_sheduler_min_lr = 0.002
-    # lr = 0.005 
-    # lr_sheduler_min_lr = 0.0008
+    # lr = 0.02 
+    # lr_sheduler_min_lr = 0.005
+    lr = 0.005 
+    lr_sheduler_min_lr = 0.0008
     lr_sheduler = True  # whether to use lr_sheduler
     num_epoch_per_update = 4
     beta_base = 0.

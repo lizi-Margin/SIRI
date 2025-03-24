@@ -1,4 +1,4 @@
-import os,time,cv2
+import os,time,cv2,copy
 import sys
 import json
 import pprint
@@ -6,6 +6,7 @@ import numpy as np
 from random import sample
 from typing import Union, List, Tuple, Dict
 from UTIL.colorful import *
+from siri.utils.logger import lprint, lprint_
 class cfg:
     logdir = './HMP_IL/'
 
@@ -210,6 +211,7 @@ class safe_load_traj_pool:
     def __init__(self, max_len=None, traj_dir="traj_pool_safe"):
         self.traj_dir = f"{cfg.logdir}/{traj_dir}/"
         self.traj_names = os.listdir(self.traj_dir)
+        self.used_traj_names = []
         if max_len is not None:
             assert max_len > 0
             if max_len < len(self.traj_names):
@@ -219,11 +221,32 @@ class safe_load_traj_pool:
         from .traj import trajectory
         traj_pool = []
         if len(self.traj_names) > n_samples:
-            n_samples = max(n_samples, 0)
-            self.traj_names = sample(self.traj_names, n_samples)
+            n_samples = max(n_samples, 1)
+
+            if len(self.used_traj_names) > (len(self.traj_names) - n_samples):
+                self.used_traj_names = []
+
+            traj_names_to_sample = copy.copy(self.traj_names)
+            for traj in self.used_traj_names:
+                if traj not in traj_names_to_sample: print亮红(lprint_(self, f"ERROR: {traj} not found in self.traj_names !!!"))
+                else: traj_names_to_sample.remove(traj)
+                    
+
+            traj_names = sample(traj_names_to_sample, n_samples)
+
+            self.used_traj_names.extend(traj_names)
+            plt = ["o"] * len(self.traj_names)
+            for traj in self.used_traj_names:
+                index = self.traj_names.index(traj)
+                plt[index] = "x"
+            print("".join(plt))
+        else:
+            self.used_traj_names = []
+            traj_names = self.traj_names
+            print("x" * len(self.traj_names))
 
         
-        for i, traj_name in enumerate(self.traj_names):
+        for i, traj_name in enumerate(traj_names):
             if traj_name.startswith(f"traj-{pool_name}"):
                 print(traj_name)
 

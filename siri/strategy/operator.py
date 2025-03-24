@@ -168,8 +168,8 @@ class pid_ctler:
 class Aimer:
     def __init__(self):
         self.pid = pid_ctler()
-        self.kx_p, self.kx_i, self.kx_d = 0.35, 1., 0.08
-        self.ky_p, self.ky_i, self.ky_d = 0.40, 1., 0.025
+        self.kx_p, self.kx_i, self.kx_d = 0.175, 0.5, 0.04
+        self.ky_p, self.ky_i, self.ky_d = 0.20, 0.5, 0.0125
 
         self.last_output = np.array([0., 0.])
         self.n_coef = 0.8
@@ -497,16 +497,25 @@ class AgentStateMachine(StateMachineBase):
         self.kb_sm_lesure.add_key('4', '5', '6')
         self.kb_sm_fight.add_key('g')
 
-
-        from imitation.net import NetActor, LSTMNet
         self.model_tick = 0.1
-        self.model = NetActor(LSTMNet).to(cfg.device)
-        self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-20000-frtlnavft-45000-pp19+nav-60000.pt")
+
+        # from imitation.net import NetActor, LSTMNet
+        # self.model = NetActor(LSTMNet).to(cfg.device)
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-20000-frtlnavft-40000.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-45000.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000.pt")
+
+        from imitation_full.net import LSTMNet
+        self.model = LSTMNet().to(cfg.device)
+        # self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000-fight-pp19-14123.pt")
+        self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000.pt")
+        # self.model.load_model("./imitation_TRAIN/BC/model-full-fight-pp19-1-reuse=1.pt")
+        # self.model.load_model("./imitation_TRAIN/BC/model-full-fight-pp19.pt")
+
+
+
         self.model.eval()
-        self.model.net.reset()
+        # self.model.net.reset()
 
         self.in_press = {
             'w': 0,
@@ -592,7 +601,7 @@ class AgentStateMachine(StateMachineBase):
                 in_search = True
                 if self._search_start_t_ is None:
                     self._start_search()
-                    self.model.net.reset()
+                    self.model.reset()
                 
                 wasd, xy = self.model.act([frame])
                 limit = 500
