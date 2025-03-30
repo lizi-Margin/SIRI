@@ -1,21 +1,20 @@
-import os
-import copy
 import torch
-import shutil, random
 import numpy as np
-import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.distributions.bernoulli import Bernoulli
 from UTIL.tensor_ops import _2tensor
 from UTIL.colorful import *
 from imitation.utils import print_dict
-from imitation.bc import AlgorithmConfig, wasd_xy_Trainer
 from siri.utils.logger import lprint_
+
+from .conf import AlgorithmConfig
+from .trainer_base import TrainerBase
 
 def t3n(x):
     return float(x.detach().mean().to("cpu").numpy())
 
-class FullTrainer(wasd_xy_Trainer):
+
+class FullTrainer(TrainerBase):
     def __init__(self, policy):
         super().__init__(policy)
         self.scaler = torch.amp.GradScaler('cuda', init_scale = 2.0**16)

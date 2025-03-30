@@ -505,10 +505,18 @@ class AgentStateMachine(StateMachineBase):
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-45000.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000.pt")
 
-        from imitation_full.net import LSTMNet
-        self.model = LSTMNet().to(cfg.device)
+        from imitation_bc.net import LSTMB5
+        self.model = LSTMB5().to(cfg.device)
+
+        # self.model_xy_trim = 1.5
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000-fight-pp19-14123.pt")
-        self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000.pt")
+
+        self.model_xy_trim = 1.0
+        self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000-classic-pp19-27000.pt")
+        
+
+        # self.model_xy_trim = 1.0
+        # self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-full-fight-pp19-1-reuse=1.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-full-fight-pp19.pt")
 
@@ -559,10 +567,10 @@ class AgentStateMachine(StateMachineBase):
 
         if self._last_detect_t > 15:
             SEARCH_T = 100.
-            SEARCH_W_T = 0.3
+            SEARCH_W_T = 0.1
         else:
             SEARCH_T = 100.
-            SEARCH_W_T = 0.3
+            SEARCH_W_T = 0.1
 
         rand_int = random.uniform(-1, 1)
 
@@ -604,6 +612,7 @@ class AgentStateMachine(StateMachineBase):
                     self.model.reset()
                 
                 wasd, xy = self.model.act([frame])
+                xy = xy * self.model_xy_trim
                 limit = 500
                 mv_x, mv_y = norm(xy[0], lower_side=-limit, upper_side=limit), norm(xy[1], lower_side=-limit, upper_side=limit)
                 if wasd[0] > 0:

@@ -13,10 +13,10 @@ from UTIL.colorful import *
 # from imitation.net import DVNet4 as Net, DVNet4 as NetActor
 # from imitation.net import LSTMNet as Net, NetActor as NetActor
 
-from imitation_full.bc import FullTrainer as Trainer
-from imitation_full.net import LSTMNet as Net, NetActor as NetActor
+from imitation_bc.bc import FullTrainer as Trainer
+# from imitation_bc.net import LSTMB5 as Net, NetActor as NetActor
+from imitation_bc.net import DVNet_SAF as Net, NetActor as NetActor
 
-from siri.vision.preprocess import crop_wh
 
 x_discretizer = NetActor.x_discretizer
 y_discretizer = NetActor.y_discretizer
@@ -30,11 +30,10 @@ except:
     policy = Net()
 
 trainer = Trainer(policy)
-trainer.load_model()
+# trainer.load_model()
 preprocess = NetActor.preprocess
 get_center = NetActor.get_center
 
-old_dataset_legacy = False
 
 def get_data(traj_pool):
     req_dict_name = ['key', 'mouse', 'FRAME_raw']
@@ -63,12 +62,12 @@ def get_data(traj_pool):
     index_r = container['key'][:, 17]
     index_l = container['key'][:, 16]
 
-    if old_dataset_legacy:
-        act_mouse_x = container['mouse'][:, 0]   /2 # !!!
-        act_mouse_y = container['mouse'][:, 1]   /2 # !!!
-    else:
-        act_mouse_x = container['mouse'][:, 0]
-        act_mouse_y = container['mouse'][:, 1]
+    # if old_dataset_legacy:
+    #     act_mouse_x = container['mouse'][:, 0]   /2 # !!!
+    #     act_mouse_y = container['mouse'][:, 1]   /2 # !!!
+    # else:
+    act_mouse_x = container['mouse'][:, 0]
+    act_mouse_y = container['mouse'][:, 1]
     # print(np.max(act_mouse, axis=0))
     # print(np.min(act_mouse, axis=0))
     # print(np.mean(act_mouse, axis=0))
@@ -103,39 +102,21 @@ def get_data(traj_pool):
 
 def data_loader_process(traj_dir, n_traj, queue):
     print蓝("[data_loader_process] started")
-    if isinstance(traj_dir, str):
-        print蓝(f"[data_loader_process] single traj_dir mode: {traj_dir}")
-        load = safe_load_traj_pool(traj_dir=traj_dir)
-        while True:
+    load = safe_load_traj_pool(traj_dir=traj_dir)
+    while True:
+        qsz = queue.qsize()
+        while qsz >= 1:
+            print蓝(f"[data_loader_process] waiting, queue.qsize()={qsz}")
+            time.sleep(1)
             qsz = queue.qsize()
-            while qsz >= 1:
-                print蓝(f"[data_loader_process] waiting, queue.qsize()={qsz}")
-                time.sleep(1)
-                qsz = queue.qsize()
-            print蓝(f"[data_loader_process] start loading: {traj_dir}")
-            pool = load(n_samples=n_traj)
-            datas = []
-            for traj in pool:
-                datas.append(get_data([traj]))
-            print蓝(f"[data_loader_process] load completed")
-            queue.put_nowait((datas, traj_dir,)) 
-            del pool
-    elif isinstance(traj_dir, (list, tuple)):
-        print蓝(f"[data_loader_process] multiple traj_dir mode: {traj_dir}")
-        itr = 0
-        while True:
-            this_traj_dir = traj_dir[itr % len(traj_dir)]
-            print蓝(f"[data_loader_process] start loading: {this_traj_dir}")
-            load = safe_load_traj_pool(traj_dir=this_traj_dir)
-            pool = load(n_samples=n_traj)
-            datas = [get_data([traj]) for traj in pool]
-            print蓝(f"[data_loader_process] load completed")
-            queue.put((datas, this_traj_dir,)) 
-            del pool
-            itr += 1
-    else:
-        assert False
-
+        print蓝(f"[data_loader_process] start loading: {traj_dir}")
+        pool = load(n_samples=n_traj)
+        datas = []
+        for traj in pool:
+            datas.append(get_data([traj]))
+        print蓝(f"[data_loader_process] load completed")
+        queue.put_nowait((datas, traj_dir,)) 
+        del pool
 
 
 def train_on(traj_dir, N_LOAD=2000):
@@ -176,7 +157,6 @@ if __name__ == '__main__':
     # ])
     
     
-    # old_dataset_legacy = True
     # train_on([
     #     'traj-Grabber-tick=0.1-limit=200-pp19',
     #     'traj-Grabber-tick=0.1-limit=200-nav',
@@ -184,5 +164,18 @@ if __name__ == '__main__':
     #     'traj-Grabber-tick=0.1-limit=200-old',
     # ], N_LOAD=15)
 
-    old_dataset_legacy = False
-    train_on('traj-Grabber-tick=0.1-limit=200-fight-pp19')
+    # train_on('traj-Grabber-tick=0.1-limit=200-fight-pp19')
+
+    # train_on('traj-Grabber-tick=0.1-limit=200-classic-pp19')
+
+    # train_on([
+    #     'traj-Grabber-tick=0.1-limit=200-pp19',
+    #     'traj-Grabber-tick=0.1-limit=200-nav',
+    #     'traj-Grabber-tick=0.1-limit=200-pure',
+    #     'traj-Grabber-tick=0.1-limit=200-old',
+    #     'traj-Grabber-tick=0.1-limit=200-classic-pp19',
+    # ])
+
+    train_on([
+        'traj-Grabber-tick=0.1-limit=200-pure',
+    ], N_LOAD=16)

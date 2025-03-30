@@ -163,6 +163,17 @@ def safe_dump(obj, path):
     with open(f"{path}/{cls_name}.json", 'w') as f:
         json.dump(serializable_data, f)
 
+old_dataset_names = [
+    'traj-Grabber-tick=0.1-limit=200-pp19',
+    'traj-Grabber-tick=0.1-limit=200-nav',
+    'traj-Grabber-tick=0.1-limit=200-pure',
+    'traj-Grabber-tick=0.1-limit=200-old',
+]
+def has_old_dataset_name(path :str):
+    for name in old_dataset_names:
+        if name in path:
+            return True
+    return False
 
 def safe_load(obj, path):
     if not os.path.exists(path):
@@ -180,6 +191,14 @@ def safe_load(obj, path):
     npy_filenames = serializable_data.pop('npy_filenames')
     for key, npy_filename in npy_filenames.items():
         numpy_arrays[key] = np.load(f"{path}/{npy_filename}", allow_pickle=True)
+
+        if has_old_dataset_name(path):
+            if key == "mouse":
+                print亮黄(f"[safe_load] warning: {path} has old dataset signiture, load key={key} in legacy mode")
+                print亮黄(f"[safe_load] key={key}, shape={numpy_arrays[key].shape}, max={np.max(numpy_arrays[key])}, min={np.min(numpy_arrays[key])}, processing")
+                numpy_arrays[key] = numpy_arrays[key] / 2
+                print亮黄(f"[safe_load] key={key}, shape={numpy_arrays[key].shape}, max={np.max(numpy_arrays[key])}, min={np.min(numpy_arrays[key])}, processed")
+
 
     if 'FRAMEs_filenames' in serializable_data:
         FRAMEs_filenames = serializable_data.pop('FRAMEs_filenames')
@@ -209,8 +228,13 @@ def safe_dump_traj_pool(traj_pool, pool_name, traj_dir=None):
 
 class safe_load_traj_pool:
     def __init__(self, max_len=None, traj_dir="traj_pool_safe"):
-        self.traj_dir = f"{cfg.logdir}/{traj_dir}/"
-        self.traj_names = os.listdir(self.traj_dir)
+        if isinstance(traj_dir, str): traj_dir = [traj_dir]
+        self.traj_names = []
+        for i in range(len(traj_dir)):
+            traj_dir[i] = f"{cfg.logdir}/{traj_dir[i]}/"
+            for traj_name in os.listdir(traj_dir[i]):
+                self.traj_names.append(f"{traj_dir[i]}/{traj_name}")
+            
         self.used_traj_names = []
         if max_len is not None:
             assert max_len > 0
@@ -246,17 +270,21 @@ class safe_load_traj_pool:
             print("x" * len(self.traj_names))
 
         
-        for i, traj_name in enumerate(traj_names):
+        for i, path_to_traj in enumerate(traj_names):
+            traj_name = os.path.basename(path_to_traj)
+            # traj_dir = os.path.dirname(path_to_traj)
             if traj_name.startswith(f"traj-{pool_name}"):
-                print(traj_name)
+                print(path_to_traj)
 
                 traj = safe_load(
                     obj=trajectory(traj_limit='auto loaded', env_id='auto loaded'),
-                    path=f"{self.traj_dir}/{traj_name}"
+                    path=path_to_traj
                 )
                 traj_pool.append(traj)
 
                 # print亮黄(f"traj loaded from file: {traj_dir}/{traj_name}")
+            else:
+                print亮红(lprint_(self, f"ERROR: traj_name invalid: {path_to_traj}"))
         
         print(f"safe loaded {len(traj_pool)} trajs")
         return traj_pool
