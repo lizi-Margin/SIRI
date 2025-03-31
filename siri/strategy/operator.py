@@ -498,6 +498,7 @@ class AgentStateMachine(StateMachineBase):
         self.kb_sm_fight.add_key('g')
 
         self.model_tick = 0.1
+        self.model_xy_trim = 1.0
 
         # from imitation.net import NetActor, LSTMNet
         # self.model = NetActor(LSTMNet).to(cfg.device)
@@ -505,21 +506,23 @@ class AgentStateMachine(StateMachineBase):
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000-navft-45000.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-nav-old-pure-50000.pt")
 
-        from imitation_bc.net import LSTMB5
-        self.model = LSTMB5().to(cfg.device)
+        # from imitation_bc.net import LSTMB5
+        # self.model = LSTMB5().to(cfg.device)
 
         # self.model_xy_trim = 1.5
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000-fight-pp19-14123.pt")
 
-        self.model_xy_trim = 1.0
-        self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000-classic-pp19-27000.pt")
-        
+        # self.model_xy_trim = 1.0
+        # self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000-classic-pp19-27000.pt")
 
         # self.model_xy_trim = 1.0
         # self.model.load_model("./imitation_TRAIN/BC/model-LSTMB5-nav-pure-pp19-14000.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-full-fight-pp19-1-reuse=1.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-full-fight-pp19.pt")
 
+        from imitation_bc.net import DVNetDual_CA
+        self.model = DVNetDual_CA().to(cfg.device)
+        self.model.load_model("./imitation_TRAIN/BC/model-DVNetDual_CA-nav-old-pure-pp19-classic-pp19-25000.pt")
 
 
         self.model.eval()

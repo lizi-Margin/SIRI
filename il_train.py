@@ -15,7 +15,8 @@ from UTIL.colorful import *
 
 from imitation_bc.bc import FullTrainer as Trainer
 # from imitation_bc.net import LSTMB5 as Net, NetActor as NetActor
-from imitation_bc.net import DVNet_SAF as Net, NetActor as NetActor
+# from imitation_bc.net import DVNet_SAF as Net, NetActor as NetActor
+from imitation_bc.net import DVNetDual_CA as Net, NetActor as NetActor
 
 
 x_discretizer = NetActor.x_discretizer
@@ -30,7 +31,7 @@ except:
     policy = Net()
 
 trainer = Trainer(policy)
-# trainer.load_model()
+trainer.load_model()
 preprocess = NetActor.preprocess
 get_center = NetActor.get_center
 
@@ -168,13 +169,13 @@ if __name__ == '__main__':
 
     # train_on('traj-Grabber-tick=0.1-limit=200-classic-pp19')
 
-    # train_on([
-    #     'traj-Grabber-tick=0.1-limit=200-pp19',
-    #     'traj-Grabber-tick=0.1-limit=200-nav',
-    #     'traj-Grabber-tick=0.1-limit=200-pure',
-    #     'traj-Grabber-tick=0.1-limit=200-old',
-    #     'traj-Grabber-tick=0.1-limit=200-classic-pp19',
-    # ])
+    train_on([
+        'traj-Grabber-tick=0.1-limit=200-pp19',
+        'traj-Grabber-tick=0.1-limit=200-nav',
+        'traj-Grabber-tick=0.1-limit=200-pure',
+        'traj-Grabber-tick=0.1-limit=200-old',
+        'traj-Grabber-tick=0.1-limit=200-classic-pp19',
+    ])
 
     train_on([
         'traj-Grabber-tick=0.1-limit=200-pure',

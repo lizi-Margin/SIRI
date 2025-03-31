@@ -17,7 +17,7 @@ def t3n(x):
 class FullTrainer(TrainerBase):
     def __init__(self, policy):
         super().__init__(policy)
-        self.scaler = torch.amp.GradScaler('cuda', init_scale = 2.0**16)
+        self.scaler = torch.GradScaler('cuda', init_scale = 2.0**16)
 
     def train_on_data_(self, data: dict):
         """ BC """
@@ -25,7 +25,7 @@ class FullTrainer(TrainerBase):
         assert 'obs' in data
         all_obs = data.pop('obs')
         assert 'obs' not in data
-        sample_size = AlgorithmConfig.sample_size
+        sample_size = int(np.random.uniform(low=AlgorithmConfig.sample_size_min, high=AlgorithmConfig.sample_size_max))
         for epoch in range(num_epoch):
             N = len(next(iter(data.values())))
             not_pass = True
@@ -40,7 +40,7 @@ class FullTrainer(TrainerBase):
                 self.optimizer.zero_grad()
 
                 try:
-                    with torch.amp.autocast_mode.autocast("cuda", dtype=torch.float16):
+                    with torch.autocast("cuda", dtype=torch.float16):
                         loss, log = self.establish_torch_graph(obs, act)
 
                     if epoch==0: print('[bc.py] Memory Allocated %.2f GB'%(torch.cuda.memory_allocated()/1073741824))
@@ -53,7 +53,7 @@ class FullTrainer(TrainerBase):
                 except torch.OutOfMemoryError:
                     print亮红(lprint_(self, f"Error: cuda out of memory, sample_size={sample_size}"))
                     sample_size = int(sample_size * 0.9)
-                    if sample_size < AlgorithmConfig.sample_size/10:
+                    if sample_size < AlgorithmConfig.sample_size_min/2:
                         raise torch.OutOfMemoryError
                     print亮红(lprint_(self, f"adjust sample_size to {sample_size}"))
                 finally:
