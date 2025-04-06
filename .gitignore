@@ -27,6 +27,7 @@ __pycache__/
 *.mp4
 *.png
 *.jpg
+!/assets/*
 
 
 /tt.py
