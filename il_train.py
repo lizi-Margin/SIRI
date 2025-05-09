@@ -16,7 +16,8 @@ from UTIL.colorful import *
 from imitation_bc.bc import FullTrainer as Trainer
 # from imitation_bc.net import LSTMB5 as Net, NetActor as NetActor
 # from imitation_bc.net import DVNet_SAF as Net, NetActor as NetActor
-from imitation_bc.net import DVNetDual_CA as Net, NetActor as NetActor
+# from imitation_bc.net import DVNetDual_CA as Net, NetActor as NetActor
+from imitation_bc.map_net import DoubleBranchMapNet as Net;NetActor = Net
 
 
 x_discretizer = NetActor.x_discretizer
@@ -31,7 +32,7 @@ except:
     policy = Net()
 
 trainer = Trainer(policy)
-trainer.load_model()
+# trainer.load_model()
 preprocess = NetActor.preprocess
 get_center = NetActor.get_center
 
@@ -46,7 +47,7 @@ def get_data(traj_pool):
     container = get_container_from_traj_pool(traj_pool, req_dict_name, req_dict_name)
     print_dict(container)
 
-    container['FRAME_center'] = np.array([get_center(frame.copy()) for frame in container['FRAME_raw']])
+    container['FRAME_center'] = [get_center(frame.copy()) for frame in container['FRAME_raw']]
     # frame = container['FRAME_center'][0]
     # print(frame.shape)
     # cv2.imshow('x',frame)
@@ -87,6 +88,7 @@ def get_data(traj_pool):
     #     frame_center = frame_center.to('cpu')
 
     data = {
+        # 'obs': preprocess(frame_center), 
         'obs': frame_center, 
 
         'wasd': index_wasd,
@@ -121,8 +123,8 @@ def data_loader_process(traj_dir, n_traj, queue):
 
 
 def train_on(traj_dir, N_LOAD=2000):
-    n_traj = 20
-    traj_reuse = 2
+    n_traj = 10
+    traj_reuse = 1
     # torch.rand(1)
     queue = mp.Queue(maxsize=2)
     loader_process = mp.Process(target=data_loader_process, args=(traj_dir, n_traj, queue), daemon=True)

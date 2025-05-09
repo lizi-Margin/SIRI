@@ -15,6 +15,8 @@ class AlgorithmConfig:
     logdir = './imitation_TRAIN/BC/'
     device = 'cuda:0'
 
+    show_preprocessed_preview = True
+
     num_epoch_per_update = 4
     sample_size_min = 45
     sample_size_max = 45

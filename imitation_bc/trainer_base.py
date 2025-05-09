@@ -56,6 +56,10 @@ class TrainerBase():
         pt_path2 = '%s/history_cpt/model_%s.pt' % (AlgorithmConfig.logdir, info)
         shutil.copyfile(pt_path, pt_path2)
 
+        # dir 3
+        pt_path3 = '%s/model-%s-AUTOSAVED.pt' % (AlgorithmConfig.logdir, self.policy.__class__.__name__)
+        shutil.copyfile(pt_path, pt_path3)
+
         print绿('save_model fin')
     
 

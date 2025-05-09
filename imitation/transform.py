@@ -38,7 +38,7 @@ def center_transform_train_f():
             lambda img: (img / 255.0),
             PrepareForNet(),
             lambda sample: torch.from_numpy(sample),
-            transforms.RandomRotation(degrees=(-0.5, -0.5), fill=(0, 0, 0)),
+            # transforms.RandomRotation(degrees=(-0.5, -0.5), fill=(0, 0, 0)),
             transforms.RandomErasing(p=0.8, scale=(0.003, 0.003), ratio=(0.3, 0.3)),
             transforms.RandomErasing(p=0.8, scale=(0.003, 0.003), ratio=(0.3, 0.3)),
             transforms.RandomErasing(p=0.8, scale=(0.003, 0.003), ratio=(0.3, 0.3)),

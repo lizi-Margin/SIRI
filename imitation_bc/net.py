@@ -13,6 +13,7 @@ from siri.vision.preprocess import crop_wh, pre_transform_crop, crop
 from imitation.discretizer import SimpleDiscretizer, wasd_Discretizer
 from imitation.utils import iterable_eq
 from UTIL.colorful import *
+from .conf import AlgorithmConfig
 
 
 x_box = [225, 195, 155, 130, 105, 85, 65, 45, 32.5, 20, 12.5, 5]; x_box = np.array(x_box + [0] + (-1 * np.array(list(reversed(copy.copy(x_box))))).tolist(), dtype=np.float32)
@@ -33,7 +34,7 @@ def load_model(m, pt_path, device='cuda'):
     return m
 
 class NetActor(nn.Module):
-    _showed = True
+    _showed = not AlgorithmConfig.show_preprocessed_preview
 
     x_discretizer = SimpleDiscretizer(x_box)
     y_discretizer = SimpleDiscretizer(y_box, MAX=Y_MAX, D_MAX=Y_D_MAX)
