@@ -34,9 +34,7 @@ class Visualizer(threading.Thread):
         self.obs_act_data: list[dict] = []
 
         self.plt = cfg.plt
-
-        # self.save_video = None
-        self.save_video = f"{self.__class__.__name__}-{time.strftime("%Y%m%d-%H%M%S")}.mp4"
+        
         self.video_writer = None
         self.video_writer_fps = 1/cfg.tick
         
@@ -80,15 +78,15 @@ class Visualizer(threading.Thread):
                         self.sv_source_queue = []
                         self.obs_act_data = []
 
-                if self.save_video is not None:
-                    if (self.video_writer is None) and ((sv_source is not None) and (obs_act is not None)):
-                        h, w, _ = annotated_frame.shape
-                        self.frame_size = (w, h)
-                        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                        self.video_writer = cv2.VideoWriter(self.save_video, fourcc, self.video_writer_fps, self.frame_size)
-                        
-                    if self.video_writer is not None:
-                        self.video_writer.write(annotated_frame)
+                if (self.video_writer is None) and ((sv_source is not None) and (obs_act is not None)):
+                    save_video = f"{self.__class__.__name__}-{time.strftime("%Y%m%d-%H%M%S")}.mp4"
+                    h, w, _ = annotated_frame.shape
+                    self.frame_size = (w, h)
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                    self.video_writer = cv2.VideoWriter(save_video, fourcc, self.video_writer_fps, self.frame_size)
+                    
+                if self.video_writer is not None:
+                    self.video_writer.write(annotated_frame)
 
 
                 if self.plt == 'plt':
