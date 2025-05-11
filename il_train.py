@@ -32,9 +32,7 @@ except:
     policy = Net()
 
 trainer = Trainer(policy)
-# trainer.load_model()
-preprocess = NetActor.preprocess
-get_center = NetActor.get_center
+trainer.load_model()
 
 
 def get_data(traj_pool):
@@ -47,7 +45,7 @@ def get_data(traj_pool):
     container = get_container_from_traj_pool(traj_pool, req_dict_name, req_dict_name)
     print_dict(container)
 
-    container['FRAME_center'] = [get_center(frame.copy()) for frame in container['FRAME_raw']]
+    container['FRAME_center'] = [NetActor.get_center(frame.copy()) for frame in container['FRAME_raw']]
     # frame = container['FRAME_center'][0]
     # print(frame.shape)
     # cv2.imshow('x',frame)
@@ -137,7 +135,7 @@ def train_on(traj_dir, N_LOAD=2000):
 
         for j in range(n_traj * traj_reuse):
             data = copy.copy(datas[j % n_traj])
-            data['obs'] = preprocess(data['obs'])
+            data['obs'] = NetActor.preprocess(data['obs'])
             print_dict(data)
             try:
                 trainer.train_on_data_(data)
@@ -177,8 +175,8 @@ if __name__ == '__main__':
         'traj-Grabber-tick=0.1-limit=200-pure',
         'traj-Grabber-tick=0.1-limit=200-old',
         'traj-Grabber-tick=0.1-limit=200-classic-pp19',
-    ])
+    ], N_LOAD=100)
 
     train_on([
         'traj-Grabber-tick=0.1-limit=200-pure',
-    ], N_LOAD=16)
+    ])

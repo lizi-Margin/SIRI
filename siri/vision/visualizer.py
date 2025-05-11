@@ -1,5 +1,6 @@
 import sys
 import cv2
+import random
 import threading, time
 import numpy as np
 import supervision as sv
@@ -38,7 +39,10 @@ class Visualizer(threading.Thread):
         self.save_video = f"{self.__class__.__name__}-{time.strftime("%Y%m%d-%H%M%S")}.mp4"
         self.video_writer = None
         self.video_writer_fps = 1/cfg.tick
-        self.last_frame = None
+        
+        self.last_sv_source = None
+        self.last_obs_act = None
+        self.last_annotated_frame = None
     
     def run(self):
         lprint(self, "start")
@@ -48,27 +52,43 @@ class Visualizer(threading.Thread):
                 # self.draw_mutex.acquire()
 
                 sleeper = Sleeper(user=self)            
+                if len(self.sv_source_queue) == 0:
+                    sv_source = self.last_sv_source
+                else:
+                    sv_source = self.sv_source_queue.pop(0)
+                    self.last_sv_source = sv_source
+                
+                if len(self.obs_act_data) == 0:
+                    obs_act = self.last_obs_act
+                else:
+                    obs_act = self.obs_act_data.pop(0)
+                    if obs_act is not None: self.last_obs_act = obs_act
+                    else: obs_act = self.last_obs_act
+
+                if sv_source is None:
+                    if self.last_annotated_frame is not None:
+                        annotated_frame = self.last_annotated_frame
+                    else:
+                        sleeper.sleep()
+                        continue
+                else:
+                    annotated_frame = self.plot(sv_source, obs_act)
+                    self.last_annotated_frame = annotated_frame
+
                 if len(self.sv_source_queue) == 0 or len(self.obs_act_data) == 0:
                     if max(len(self.sv_source_queue), len(self.obs_act_data)) > 3:
                         self.sv_source_queue = []
                         self.obs_act_data = []
-                    if self.last_frame is None:
-                        sleeper.sleep()
-                        continue
-                else:
-                    sv_source = self.sv_source_queue.pop(0)
-                    obs_act = self.obs_act_data.pop(0)
-
-                    annotated_frame = self.plot(sv_source, obs_act)
-                    self.last_frame = annotated_frame.copy()
 
                 if self.save_video is not None:
-                    if self.video_writer is None:
+                    if (self.video_writer is None) and ((sv_source is not None) and (obs_act is not None)):
                         h, w, _ = annotated_frame.shape
                         self.frame_size = (w, h)
                         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
                         self.video_writer = cv2.VideoWriter(self.save_video, fourcc, self.video_writer_fps, self.frame_size)
-                    self.video_writer.write(annotated_frame)
+                        
+                    if self.video_writer is not None:
+                        self.video_writer.write(annotated_frame)
 
 
                 if self.plt == 'plt':
@@ -132,7 +152,8 @@ class Visualizer(threading.Thread):
         deep_frame = sv_source['deep_frame']
         assert frame is not None
 
-        
+        MAX_WIDTH = 1200
+
         
         # draw supervision boxes
         if sv_source['detections'] is not None:
@@ -208,46 +229,81 @@ class Visualizer(threading.Thread):
 
 
             # 4, 5, 6, g
-            left_keys = ['4', '5', '6', 'g']
+            left_keys = ['4', '5', '6', 'g', 'reload', 'jump', 'crouch']
             left_start_x = 10
-            left_start_y = start_y - 4 * KEY_SIZE
+            left_start_y = start_y - len(left_keys) * KEY_SIZE
             for i, key in enumerate(left_keys):
                 x = left_start_x
                 y = left_start_y + i * (KEY_SIZE + 0)  # 间隔
-                color = KEY_COLOR_DOWN if act[key] else KEY_COLOR_UP
+                color = KEY_COLOR_DOWN if ((key in act) and act[key]) else KEY_COLOR_UP
                 cv2.rectangle(frame, (x, y), (x + KEY_SIZE, y + KEY_SIZE), color, -1)
                 cv2.putText(frame, key.upper(), (x + 10, y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+            
+            # policy input
+            if obs['policy_input'] is not None:
+                policy_input = obs['policy_input']
+                if isinstance(policy_input, np.ndarray):
+                    policy_input = (policy_input,)
+                else:
+                    assert isinstance(policy_input, tuple)
+                    assert len(policy_input) > 0
+                    assert isinstance(policy_input[0], np.ndarray)
+                policy_input_block = None
+                for input_frame in policy_input:
+                    if policy_input_block is None:
+                        policy_input_block = input_frame
+                        policy_input_block_width = policy_input_block.shape[1]
+                    else:
+                        # 上下合并
+                        input_frame_with_bg = self.embed_image_in_black_bg_width(input_frame, policy_input_block_width)
+                        policy_input_block = np.vstack((policy_input_block, input_frame_with_bg))
+                
+                frame_height, frame_width = frame.shape[:2]
+                policy_input_block_height, policy_input_block_width = policy_input_block.shape[:2]
 
-        if deep_frame is None:
-            return frame
+                if frame_height > policy_input_block_height:
+                    policy_input_block = self.embed_image_in_black_bg(policy_input_block, frame_height)
+                else:
+                    frame = self.embed_image_in_black_bg(frame, policy_input_block_height)
 
-        if len(deep_frame.shape) == 2:
-            # 归一化到 [0, 255]
-            depth_min = deep_frame.min()
-            depth_max = deep_frame.max()
-            if depth_max > depth_min:
-                deep_frame = 255 * (deep_frame - depth_min) / (depth_max - depth_min)
-            deep_frame = np.uint8(deep_frame)
-            # deep_frame = cv2.cvtColor(deep_frame, cv2.COLOR_GRAY2BGR)
-            deep_frame = cv2.applyColorMap(deep_frame, cv2.COLORMAP_INFERNO)
+                # 左右拼接两个图像
+                combined_frame = np.hstack((frame, policy_input_block))
 
-        # 获取两个图像的高度和宽度
-        frame_height, frame_width = frame.shape[:2]
-        deep_frame_height, deep_frame_width = deep_frame.shape[:2]
+                
+                if combined_frame.shape[1] > MAX_WIDTH:
+                    combined_frame = resize_image_to_width(combined_frame, MAX_WIDTH)
+                frame = combined_frame
+                
 
-        # 确保两个图像高度一致
-        if frame_height > deep_frame_height:
-            deep_frame = self.embed_image_in_black_bg(deep_frame, frame_height)
-        else:
-            frame = self.embed_image_in_black_bg(frame, deep_frame_height)
+        if deep_frame is not None:
 
-        # 左右拼接两个图像
-        combined_frame = np.hstack((frame, deep_frame))
+            if len(deep_frame.shape) == 2:
+                # 归一化到 [0, 255]
+                depth_min = deep_frame.min()
+                depth_max = deep_frame.max()
+                if depth_max > depth_min:
+                    deep_frame = 255 * (deep_frame - depth_min) / (depth_max - depth_min)
+                deep_frame = np.uint8(deep_frame)
+                # deep_frame = cv2.cvtColor(deep_frame, cv2.COLOR_GRAY2BGR)
+                deep_frame = cv2.applyColorMap(deep_frame, cv2.COLORMAP_INFERNO)
 
-        MAX_WIDTH = 1200
-        if combined_frame.shape[1] > MAX_WIDTH:
-            combined_frame = resize_image_to_width(combined_frame, MAX_WIDTH)
-        return combined_frame
+            # 获取两个图像的高度和宽度
+            frame_height, frame_width = frame.shape[:2]
+            deep_frame_height, deep_frame_width = deep_frame.shape[:2]
+
+            # 确保两个图像高度一致
+            if frame_height > deep_frame_height:
+                deep_frame = self.embed_image_in_black_bg(deep_frame, frame_height)
+            else:
+                frame = self.embed_image_in_black_bg(frame, deep_frame_height)
+
+            # 左右拼接两个图像
+            combined_frame = np.hstack((frame, deep_frame))
+
+            if combined_frame.shape[1] > MAX_WIDTH:
+                combined_frame = resize_image_to_width(combined_frame, MAX_WIDTH)
+            frame = combined_frame
+        return frame
 
     def embed_image_in_black_bg(self, small_img, target_height):
         """
@@ -269,4 +325,17 @@ class Visualizer(threading.Thread):
 
         # 将小图像嵌入到黑色背景中
         black_bg[start_y:start_y + small_height, :] = small_img
+        return black_bg
+    
+    def embed_image_in_black_bg_width(self, small_img, target_width):
+        small_height, small_width = small_img.shape[:2]
+        black_bg = np.zeros((small_height, target_width, 3), dtype=np.uint8)
+        start_x = (target_width - small_width) // 2
+
+        # 检查小图像是否为单通道
+        if len(small_img.shape) == 2:
+            # 将单通道图像转换为三通道图像
+            small_img = cv2.cvtColor(small_img, cv2.COLOR_GRAY2BGR)
+
+        black_bg[:, start_x:start_x + small_width] = small_img
         return black_bg

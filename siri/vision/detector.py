@@ -3,8 +3,10 @@ import cv2
 import mss
 import time
 import torch
+import random
 import threading
 import subprocess
+import pytesseract
 import numpy as np
 import supervision as sv
 import torchvision.transforms as transforms
@@ -443,8 +445,52 @@ class Detector(threading.Thread):
             frame = cv2.putText(frame, wh_str, (int(x2), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, thickness=1)
 
         return is_enm, frame
+    
+    def get_ammo_text(self, gray):
+        # get text
+        text = pytesseract.image_to_string(gray, config='--psm 7 --oem 1 -c tessedit_char_whitelist=0123456789/')
+        # text = pytesseract.image_to_string(gray, config='--psm 7 --oem 3 -c tessedit_char_whitelist=0123456789/')
+        text = ''.join(c for c in text if c.isdigit() or c == '/').strip()
+        if '/' in text:
+            tmp = text.split('/')
+            in_mag_ammo = int(tmp[0]) if tmp[0] else 0
+            all_ammo = int(tmp[1]) if tmp[1] else 0
+        else:
+            # text to int
+            in_mag_ammo = int(text) if text else 0
+            all_ammo = in_mag_ammo
+        return in_mag_ammo, all_ammo
 
+    def detect_ammo(self, frame):
+        h, w, _ = frame.shape
+        left_trim = 70
+        ammo_feild = frame[h-67:h-49, w//2-left_trim: w//2-22]
+        gray = cv2.cvtColor(ammo_feild, cv2.COLOR_BGR2GRAY)
 
+        gray = cv2.convertScaleAbs(gray, alpha=1.5, beta=0)
+        # _, gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # _, gray = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+        
+    
+        if hasattr(self, "last_ammo"):
+            now_time = time.time()
+            if now_time - self.last_ammo_time > 3.:
+                self.last_ammo_time = now_time
+                self.last_ammo = self.get_ammo_text(gray)
+        else:
+            self.last_ammo_time = time.time()
+            self.last_ammo = self.get_ammo_text(gray)
+        in_mag_ammo, all_ammo = self.last_ammo
+        text = f"{in_mag_ammo}/{all_ammo}"
+
+        # print text to frame
+        if text:
+            cv2.putText(frame, text, (w//2-left_trim, h-67), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.rectangle(frame, (w//2-left_trim, h-67), (w//2-22, h-49), (0, 255, 0), 1)
+        gray = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        cv2.imwrite('gray.png', gray)
+        frame[h-67:h-49, w//2-left_trim: w//2-22] = gray
+        return (in_mag_ammo, all_ammo,), frame
 
  
 
@@ -515,10 +561,12 @@ class Detector(threading.Thread):
 
         
         in_scope, frame = self.circle_detect_(frame, self.scope_bt_x, self.scope_bt_y, self.scope_bt_r, self.scope_bt_color_lb, self.scope_bt_color_ub, 10000, visual_color=self.scope_bt_color_mean)
+        ammo, frame = self.detect_ammo(frame)
         
 
         obs = {
             'in_scope': in_scope,
+            'ammo': ammo,
             'frame': frame_original.copy(),
             'deep_frame': deep_frame.copy()
         }
@@ -559,6 +607,30 @@ class ScrGrabber():
                 return x, y, scr_width, scr_height
         return None
 
+    @staticmethod
+    def sync_monitor(geometry):
+        left, top, scr_width, scr_height = geometry
+        GloablStatus.monitor = {
+            "top": top,
+            "left": left,
+            "width": scr_width,
+            "height": scr_height,
+        }
+        lprint(ScrGrabber, f"sync_monitor: {GloablStatus.monitor}")
+    
+    def sync_monitor_every_n_step(self, n=100):
+        if hasattr(self, "sync_monitor_counter"):
+            self.sync_monitor_counter += 1
+        else:
+            self.sync_monitor_counter = 0
+        if self.sync_monitor_counter % n == 0:
+            geometry = self.get_scrcpy_window_geometry()
+            if not geometry:
+                lprint(self, "scrcpy window not found")
+            else:
+                self.sync_monitor(geometry)
+            self.sync_monitor_counter = 0
+
     def start_session(self, func, *args, **kwargs):
         geometry = self.get_scrcpy_window_geometry()
         if not geometry:
@@ -567,14 +639,8 @@ class ScrGrabber():
             return
 
         assert GloablStatus.monitor is None
-        left, top, scr_width, scr_height = geometry
-
-        GloablStatus.monitor = {
-            "top": top,
-            "left": left,
-            "width": scr_width,
-            "height": scr_height,
-        }
+        self.sync_monitor(geometry)
+        
 
         try:
             with mss.mss() as sct:
@@ -589,6 +655,7 @@ class ScrGrabber():
 
                     func(frame, *args, **kwargs)
 
+                    self.sync_monitor_every_n_step(n=100)
                     sleeper.sleep()
         except KeyboardInterrupt:
             lprint(self, "Sig INT catched, stopping session.")

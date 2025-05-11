@@ -4,6 +4,7 @@ import threading
 import numpy as np
 from pynput.mouse import Controller as MouseController, Button
 from pynput.keyboard import Controller as KBController
+from pynput import keyboard, mouse
 
 from siri.global_config import GloablStatus
 from siri.global_config import GlobalConfig as cfg
@@ -11,7 +12,9 @@ from siri.utils.logger import lprint
 from siri.utils.sleeper import Sleeper
 
 
-
+start_char = 'z'
+stop_char = 'x'
+stop_all = True
 
 
 class KB:
@@ -50,6 +53,20 @@ def move_mouse(move_x, move_y):
     if abs(move_x) < 0.1 and abs(move_y) < 0.1:
         return  # abort
     mouse.move(move_x, move_y)
+
+
+def on_key_press(key):
+    if hasattr(key, 'char'):
+        global stop_all
+        if key.char == stop_char:
+            stop_all = True
+            # 全部松开
+            unpress_kb_bt()
+            # release('w'); release('a'); release('s'); release('d')
+        elif key.char == start_char:
+            stop_all = False
+control_listener = keyboard.Listener(on_press=on_key_press)
+control_listener.start()
 
 
 # def move_mouse(move_x, move_y):
@@ -494,8 +511,8 @@ class AgentStateMachine(StateMachineBase):
         self.aimer = Aimer()
         self.kb_sm_lesure = KBStateMachine()
         self.kb_sm_fight = KBStateMachine()
-        self.kb_sm_lesure.add_key('4', '5', '6')
-        self.kb_sm_fight.add_key('g')
+        self.kb_sm_lesure.add_key('4', '5')
+        self.kb_sm_fight.add_key('g', '6')
 
         self.model_tick = 0.1
         self.model_xy_trim = 1.0
@@ -520,10 +537,16 @@ class AgentStateMachine(StateMachineBase):
         # self.model.load_model("./imitation_TRAIN/BC/model-full-fight-pp19-1-reuse=1.pt")
         # self.model.load_model("./imitation_TRAIN/BC/model-full-fight-pp19.pt")
 
-        from imitation_bc.net import DVNetDual_CA
-        self.model = DVNetDual_CA().to(cfg.device)
-        self.model.load_model("./imitation_TRAIN/BC/model-DVNetDual_CA-nav-old-pure-pp19-classic-pp19-25000.pt")
+        # from imitation_bc.net import DVNetDual_CA
+        # self.model = DVNetDual_CA().to(cfg.device)
+        # self.model.load_model("./imitation_TRAIN/BC/model-DVNetDual_CA-nav-old-pure-pp19-classic-pp19-25000.pt")
 
+        from imitation_bc.map_net import DoubleBranchMapNet
+        self.model = DoubleBranchMapNet().to(cfg.device)
+        self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-p-15000.pt"); self.model.__class__.use_map_aug = True
+        # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000.pt"); self.model.__class__.use_map_aug = True
+        # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet-nop-p19-cp19-32880.pt"); self.model.__class__.use_map_aug = False
+        # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-binary_coef=20-16000.pt"); self.model.__class__.use_map_aug = True
 
         self.model.eval()
         # self.model.net.reset()
@@ -542,16 +565,20 @@ class AgentStateMachine(StateMachineBase):
         no_target = (not 'xy' in obs)
         deep_frame = obs['deep_frame']
         frame = obs['frame']
+        policy_input = self.model.get_center(frame)
         f = obs['f']
         l = obs['l']
         r = obs['r']
+        ammo = obs['ammo']
         obs_dict = {
             'in_scope': 1 if obs['in_scope'] else 0,
             'xy': (0, 0,) if no_target else obs['xy'],
-            'deep_frame': obs['deep_frame'],
+            'deep_frame': deep_frame,
+            'policy_input': policy_input,
             'f': f,
             'l': l,
-            'r': r
+            'r': r,
+            'ammo': ammo
         }
 
         act_dict = {
@@ -565,7 +592,13 @@ class AgentStateMachine(StateMachineBase):
             '4': 0,
             '5': 0,
             '6': 0,
-            'g': 0
+            'g': 0,
+
+            'jump'   : 0,
+            'crouch' : 0,
+            'reload' : 0,
+            'mouse_right': 0,
+            'mouse_left' : 0
         }
 
         if self._last_detect_t > 15:
@@ -601,8 +634,9 @@ class AgentStateMachine(StateMachineBase):
             self.aimer.pid.reset()
             ex, ey = self.aimer.calc_error(*GloablStatus.in_window_center_xy())
             mv_x, mv_y = self.aimer.calc_movement(ex, ey, False)
-            if random.uniform(0, 1) < 0.02:
-                act_dict = self.kb_sm_lesure.step(act_dict)
+            if self._last_detect_t > 5:
+                if random.uniform(0, 1) < 0.03:
+                    act_dict = self.kb_sm_lesure.step(act_dict)
 
             if self._last_fire_t > 1 and self._last_search_t > SEARCH_W_T:
                 assert self.model_tick > cfg.tick
@@ -614,7 +648,13 @@ class AgentStateMachine(StateMachineBase):
                     self._start_search()
                     self.model.reset()
                 
-                wasd, xy = self.model.act([frame])
+                o = self.model.act([frame])
+                if len(o) == 2:
+                    wasd, xy = o
+                    info = {}
+                else:
+                    wasd, xy, info = o
+                    print(info)
                 xy = xy * self.model_xy_trim
                 limit = 500
                 mv_x, mv_y = norm(xy[0], lower_side=-limit, upper_side=limit), norm(xy[1], lower_side=-limit, upper_side=limit)
@@ -626,6 +666,20 @@ class AgentStateMachine(StateMachineBase):
                     act_dict['s'] = 1
                 elif wasd[3] > 0:
                     act_dict['d'] = 1
+                
+                if (
+                    (('reload' in info) and info['reload'])
+                    or
+                    ((0< ammo[0] < 30) and ammo[1] > 30 and (random.uniform(0., 1.) < 0.6))
+                ):
+                    act_dict['reload'] = 1
+                    hit_kb_bt('r')
+                if ('jump' in info) and info['jump']:
+                    act_dict['jump'] = 1
+                    hit_kb_bt(' ')
+                if ('crouch' in info) and info['crouch']:
+                    act_dict['crouch'] = 1
+                    hit_kb_bt('c')
            
             # else:
             #     if self._last_search_t > SEARCH_W_T/2 and self._last_detect_t > 4:
@@ -657,7 +711,8 @@ class AgentStateMachine(StateMachineBase):
                         self._scope_start_t_ = time.time()
                         mouse.click(Button.right)
             
-            if random.uniform(0, 1) < 0.02:
+            if self._fire_start_t_ is None:
+                if random.uniform(0, 1) < 0.1:
                     act_dict = self.kb_sm_fight.step(act_dict)
 
         
@@ -727,7 +782,8 @@ class Operator(threading.Thread):
         self.obs_ready_mutex = threading.Semaphore(value=0)
         self.draw_action_hook = draw_action_hook
 
-        self.sm = AgentStateMachine()
+        self.sm_t = AgentStateMachine
+        self.sm = None
 
         self.start_time = time.time()
         
@@ -748,9 +804,13 @@ class Operator(threading.Thread):
 
                 obs = self.obs; self.obs = None
 
-                data = self.sm.step(obs)
-
-                self.draw_action_hook(data)
+                if not stop_all:
+                    if self.sm is None:
+                        self.sm = self.sm_t()
+                    data = self.sm.step(obs)
+                    self.draw_action_hook(data)
+                else:
+                    self.sm = None
         except KeyboardInterrupt:
             lprint(self, "Sig INT catched, stopping session.")
         finally:

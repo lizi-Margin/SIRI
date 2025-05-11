@@ -121,12 +121,11 @@ class FullTrainer(TrainerBase):
         index_l =  _2tensor(act['l'])
 
 
-        new_coef = 0.2
 
         category_actLogProbs = (
             dist_wasd.log_prob(index_wasd) + dist_x.log_prob(index_x) + dist_y.log_prob(index_y)
         )/3
-        binary_actLogProbs = new_coef * (
+        binary_actLogProbs = AlgorithmConfig.binary_coef * (
             dist_jump.log_prob(index_jump) + dist_crouch.log_prob(index_crouch) + dist_reload.log_prob(index_reload)
             + dist_r.log_prob(index_r) + dist_l.log_prob(index_l)
         )/5
@@ -138,7 +137,7 @@ class FullTrainer(TrainerBase):
         category_distEntropy = (
             dist_wasd.entropy() + dist_x.entropy() + dist_y.entropy()
         )/3
-        binary_distEntropy = new_coef * (
+        binary_distEntropy = AlgorithmConfig.binary_coef * (
             dist_jump.entropy() + dist_crouch.entropy() + dist_reload.entropy()
             + dist_r.entropy() + dist_l.entropy()
         )/5

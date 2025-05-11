@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Union, List
 from torchvision.transforms import Compose
+from torch.distributions.bernoulli import Bernoulli
 
 from imitation.conv_lstm import ConvLSTM
 from torchsummary import summary
@@ -144,7 +145,7 @@ class NetActor(nn.Module):
         self.input_frame_shape = (3,) + tuple(reversed(input_sz_wh))
         lprint(self, f"input frame shape: {self.input_frame_shape}, if it's changed, errors may occur")
     
-        self.hs = None
+        self.reset()
 
     def reset(self): self.hs = None
 
@@ -182,17 +183,22 @@ class NetActor(nn.Module):
             logit_r,
             logit_l
         ) = logit
-
         return (
             torch.argmax(logit_wasd, dim=-1),
             torch.argmax(logit_x, dim=-1),
             torch.argmax(logit_y, dim=-1),
 
-            torch.sigmoid(logit_jump) > 0.5,
-            torch.sigmoid(logit_crouch) > 0.5,
-            torch.sigmoid(logit_reload) > 0.5,
-            torch.sigmoid(logit_r) > 0.5,
-            torch.sigmoid(logit_l) > 0.5,
+            # torch.sigmoid(logit_jump) > 0.5,
+            # torch.sigmoid(logit_crouch) > 0.5,
+            # torch.sigmoid(logit_reload) > 0.5,
+            # torch.sigmoid(logit_r) > 0.5,
+            # torch.sigmoid(logit_l) > 0.5,
+
+            Bernoulli(logits=logit_jump).sample(),
+            Bernoulli(logits=logit_crouch).sample(),
+            Bernoulli(logits=logit_reload).sample(),
+            Bernoulli(logits=logit_r).sample(),
+            Bernoulli(logits=logit_l).sample(),
         )
     
 

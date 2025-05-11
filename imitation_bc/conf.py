@@ -6,7 +6,7 @@ def get_a_logger():
                     draw_mode='Img',
                     tag='[task_runner.py]',
                     resume_mod=False)
-    mcv.rec_init(color='b')
+    mcv.rec_init(color='k')
     return mcv
 
 
@@ -27,10 +27,12 @@ class AlgorithmConfig:
 
     # behavior cloning part
     lr = 0.01
-    lr_sheduler_min_lr = 0.005
+    lr_sheduler_min_lr = 0.001
     # lr = 0.005 
     # lr_sheduler_min_lr = 0.0008
     lr_sheduler = True  # whether to use lr_sheduler
     dist_entropy_loss_coef = 1e-4
+
+    binary_coef = 0.
 
     mcom = get_a_logger()

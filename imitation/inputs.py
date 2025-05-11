@@ -99,14 +99,7 @@ class Grabber(ScrGrabber):
             return
 
         assert GloablStatus.monitor is None
-        left, top, scr_width, scr_height = geometry
-
-        GloablStatus.monitor = {
-            "top": top,
-            "left": left,
-            "width": scr_width,
-            "height": scr_height,
-        }
+        self.sync_monitor(geometry)
 
         
 
@@ -193,6 +186,7 @@ class Grabber(ScrGrabber):
                     traj.remember('mouse', mouse_movement.copy())
                     traj.time_shift()
                     # actions = init_actions()
+                    self.sync_monitor_every_n_step(n=100)
                     sleeper.sleep()
         except KeyboardInterrupt:
             lprint(self, "Sig INT catched, stopping session.")
