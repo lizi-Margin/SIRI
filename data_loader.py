@@ -79,7 +79,7 @@ def get_data(traj_pool, NetActor):
 
     return data
 
-def data_loader_process(traj_dir, n_traj, queue):
+def data_loader_process(traj_dir, n_traj, queue, NetActor):
     print蓝("[data_loader_process] started")
     load = safe_load_traj_pool(traj_dir=traj_dir)
     while True:
@@ -92,7 +92,7 @@ def data_loader_process(traj_dir, n_traj, queue):
         pool = load(n_samples=n_traj)
         datas = []
         for traj in pool:
-            datas.append(get_data([traj]))
+            datas.append(get_data([traj], NetActor))
         print蓝(f"[data_loader_process] load completed")
         queue.put_nowait((datas, traj_dir,)) 
         del pool

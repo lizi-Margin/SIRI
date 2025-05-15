@@ -221,11 +221,11 @@ class DoubleBranchMapAC(MapACBase):
         self.map_features, mt, _, _ = self.get_efficientnet_b5() 
         mh, mw = 8, 12
 
-        # lstm_o_chns = t//2, mt//2
-        # conv_lstm_layers = 2
+        lstm_o_chns = t//2, mt//2
+        conv_lstm_layers = 2
 
-        lstm_o_chns = t, mt
-        conv_lstm_layers = 1
+        # lstm_o_chns = t, mt
+        # conv_lstm_layers = 1
 
         self.conv_lstm = ConvLSTM(
             input_dim=t,

@@ -19,9 +19,11 @@ from UTIL.colorful import *
 # from imitation_bc.net import DVNetDual_CA as Net, NetActor as NetActor
 # from imitation_bc.map_net import DoubleBranchMapNet as Net;NetActor = Net
 
-from imitation_airl.bc import Trainer
-from imitation_airl.AC import DoubleBranchMapActor as Net;NetActor = Net
+# from imitation_airl.bc import Trainer
+# from imitation_airl.AC import DoubleBranchMapAC as Net;NetActor = Net
 
+from imitation_daggr.bc import Trainer
+from imitation_daggr.AC import DoubleBranchMapAC as Net;NetActor = Net
 
 # CENTER_SZ_WH = NetActor.CENTER_SZ_WH
 # try:
@@ -39,7 +41,7 @@ def train_on(traj_dir, N_LOAD=2000):
     traj_reuse = 1
     # torch.rand(1)
     queue = mp.Queue(maxsize=2)
-    loader_process = mp.Process(target=data_loader_process, args=(traj_dir, n_traj, queue), daemon=True)
+    loader_process = mp.Process(target=data_loader_process, args=(traj_dir, n_traj, queue, NetActor), daemon=True)
     loader_process.start()
 
     for i in range(N_LOAD):
@@ -83,13 +85,13 @@ if __name__ == '__main__':
 
     # train_on('traj-Grabber-tick=0.1-limit=200-classic-pp19')
 
-    # train_on([
-    #     'traj-Grabber-tick=0.1-limit=200-pp19',
-    #     'traj-Grabber-tick=0.1-limit=200-nav',
-    #     'traj-Grabber-tick=0.1-limit=200-pure',
-    #     'traj-Grabber-tick=0.1-limit=200-old',
-    #     'traj-Grabber-tick=0.1-limit=200-classic-pp19',
-    # ], N_LOAD=100)
+    train_on([
+        'traj-Grabber-tick=0.1-limit=200-pp19',
+        'traj-Grabber-tick=0.1-limit=200-nav',
+        'traj-Grabber-tick=0.1-limit=200-pure',
+        'traj-Grabber-tick=0.1-limit=200-old',
+        'traj-Grabber-tick=0.1-limit=200-classic-pp19',
+    ], N_LOAD=500)
 
     train_on([
         'traj-Grabber-tick=0.1-limit=200-pure',
