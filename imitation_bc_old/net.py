@@ -20,7 +20,7 @@ y_box = [100, 50, 25, 10]; y_box = np.array(y_box + [0] + (-1 * np.array(list(re
 Y_MAX=300
 Y_D_MAX=200
 
-from .transform import center_transform_train, center_transform_test
+from imitation.transform import center_transform_train, center_transform_test
 
 def load_model(m, pt_path, device='cuda'):
     if not os.path.exists(pt_path): 
@@ -142,7 +142,7 @@ class LSTMNet(nn.Module):
         features = list(base_model.features.children())[:6]
         self.features = nn.Sequential(*features)
         t, h, w = 112, 12, 25
-        from .conv_lstm import ConvLSTM
+        from imitation.conv_lstm import ConvLSTM
         self.conv_lstm = ConvLSTM(
             input_dim=t,
             hidden_dim=t,
@@ -398,7 +398,7 @@ class DVNet(DVNetBase):
         
         
 
-        from .conv_lstm import ConvLSTM
+        from imitation.conv_lstm import ConvLSTM
         self.conv_lstm = ConvLSTM(
             input_dim=2*t,
             hidden_dim=2*t,
@@ -486,7 +486,7 @@ class DVNet2(DVNetBase):
         
 
         lstm_t = t + self.depth_t
-        from .conv_lstm import ConvLSTM
+        from imitation.conv_lstm import ConvLSTM
         self.conv_lstm = ConvLSTM(
             input_dim=lstm_t,
             hidden_dim=lstm_t,
@@ -569,7 +569,7 @@ class DVNet3(DVNetBase):
         raw_feat_t, raw_feat_h, raw_feat_w = 112, 12, 25
         deep_feat_t, deep_feat_h, deep_feat_w = 112, 12, 25
 
-        from .conv_lstm import ConvLSTM
+        from imitation.conv_lstm import ConvLSTM
         self.raw_conv_lstm = ConvLSTM(
             input_dim=raw_feat_t,
             hidden_dim=raw_feat_t,
@@ -664,7 +664,7 @@ class DVNet4(DVNetBase):
 
         deep_feat_t, deep_feat_h, deep_feat_w = 112, 12, 25
 
-        from .conv_lstm import ConvLSTM
+        from imitation.conv_lstm import ConvLSTM
         self.deep_conv_lstm = ConvLSTM(
             input_dim=deep_feat_t,
             hidden_dim=deep_feat_t,

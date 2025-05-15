@@ -72,7 +72,7 @@ def on_mouse_release(x, y, button, _):
     #    actions[MOUSE_BUTTONS[button]] = 0
 
 
-class Grabber(ScrGrabber):
+class ILGrabber(ScrGrabber):
     def __init__(self):
         super().__init__()
         self.traj_pool: list[trajectory] = []
@@ -202,6 +202,129 @@ class Grabber(ScrGrabber):
             safe_dump_traj_pool(self.traj_pool, pool_name)
             print亮黄(lprint_(self, "terminated"))
 
+def norm(x: float, lower_side: float=-1.0, upper_side: float=1.0):
+    if (x > upper_side): x = upper_side
+    if (x < lower_side): x = lower_side
+    return x
 
 
+class RLGrabber(ILGrabber):
+    def __init__(self):
+        super().__init__()
+        from .outputs import OutputUnit
+        self.output = OutputUnit()
 
+    @staticmethod
+    def get_real_act(wasd, xy):
+        limit = 500
+        mv_x, mv_y = norm(xy[0], lower_side=-limit, upper_side=limit), norm(xy[1], lower_side=-limit, upper_side=limit)
+        act_dict = {
+            'w': 0,
+            'a': 0,
+            's': 0,
+            'd': 0,
+        }
+        if wasd[0] > 0:
+            act_dict['w'] = 1
+        elif wasd[1] > 0:
+            act_dict['a'] = 1
+        elif wasd[2] > 0:
+            act_dict['s'] = 1
+        elif wasd[3] > 0:
+            act_dict['d'] = 1
+        return act_dict, mv_x, mv_y
+    
+
+    def start_rl_session(self, rl_alg):
+        geometry = self.get_scrcpy_window_geometry()
+        if not geometry:
+            lprint(self, "scrcpy window not found")
+            lprint(self, "start_session failed")
+            return
+
+        assert GloablStatus.monitor is None
+        self.sync_monitor(geometry)
+
+        
+
+        # Initialize listeners
+        self.keyboard_listener = keyboard.Listener(on_press=on_key_press, on_release=on_key_release)
+        self.mouse_listener = mouse.Listener(on_move=on_mouse_move, on_click=on_mouse_press, on_release=on_mouse_release)
+        self.keyboard_listener.start()
+        self.mouse_listener.start()
+
+        print蓝("RL session start...")
+        
+        try:
+            with mss.mss() as sct:
+                def grab_screen():
+                    screenshot = sct.grab(GloablStatus.monitor)
+                    frame = np.array(screenshot)
+                    if frame.shape[-1] == 4:
+                        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                    assert frame.shape[-1] == 3, 'not a BGR format'
+                    frame_hw = frame.shape[:2]
+                    if not iterable_eq(frame_hw, tuple(reversed(cfg.sz_wh))):
+                        if not hasattr(self, "_sz_noticed"):
+                            self._sz_noticed = True
+                            lprint(self, f"Warning: frame_hw={frame_hw}, resize will be used")
+                        frame = cv2.resize(frame, cfg.sz_wh)
+                    return frame, time.time_ns()
+
+                traj = self.new_traj()
+                time.sleep(self.tick)
+
+
+                global start, stop
+                stop = 1
+                real_stop = 1
+                while True:
+                    if real_stop:
+                        print(end='\n')
+                        while not start: 
+                            rl_alg.train()
+                            time.sleep(0.25)
+                            print靛('\r'+lprint_(self, "paused"), end='')
+                        if traj.time_pointer > 0:
+                            self.traj_pool.append(traj)
+                            traj = self.new_traj()
+                        stop = 0
+                        real_stop = 0
+                    if stop: real_stop = 1
+                    start = 0
+
+                    print绿('\r'+lprint_(self, f"started, traj collected: {len(self.traj_pool)}"), end='')
+                    sleeper = Sleeper(tick=self.tick, user=self)
+                    
+                    frame, frame_time = grab_screen()
+                    wasd, xy = rl_alg.interact_with_env({
+                        'obs': frame,
+                        'done': (traj.time_pointer >= self.traj_limit - 1) or stop,
+                    })
+                    act_dict, mv_x, mv_y = self.get_real_act(wasd, xy)
+                    self.output.output_real_act(act_dict, mv_x, mv_y, sleeper)
+                    
+                    traj.remember('FRAME_raw', frame.copy())
+                    traj.remember('key', wasd)
+                    traj.remember('mouse', xy)
+                    traj.time_shift()
+                    if traj.time_pointer == self.traj_limit:
+                        self.traj_pool.append(traj)
+                        traj = self.new_traj()
+
+                    self.sync_monitor_every_n_step(n=100)
+                    sleeper.sleep()
+                    # rl_alg.train()
+        except KeyboardInterrupt:
+            lprint(self, "Sig INT catched, stopping session.")
+        finally:
+            if traj.time_pointer > 0:
+                self.traj_pool.append(traj)
+
+            # cv2.destroyAllWindows()
+            GloablStatus.monitor = None
+            GloablStatus.stop_event.set()
+            # for i in range(len(self.traj_pool)): self.traj_pool[i].cut_tail()
+            # pool_name = f"{self.__class__.__name__}-tick={self.tick}-limit={self.traj_limit}-{time.strftime("%Y%m%d-%H:%M:%S")}"
+            # safe_dump_traj_pool(self.traj_pool, pool_name, traj_dir=f"HMP_IL/AIRL/AUTOSAVED/{time.strftime("%Y%m%d-%H:%M:%S")}/")
+            print亮黄(lprint_(self, "terminated"))

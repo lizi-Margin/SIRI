@@ -21,7 +21,7 @@ class ConfigCache(object):
     def read_cfg(self):
         from siri.global_config import GlobalConfig
         self.device_ = GlobalConfig.device
-        self.use_float64_ = not GlobalConfig.half
+        self.use_float64_ = False
         self.init = True
 
     @property

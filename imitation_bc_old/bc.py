@@ -9,9 +9,41 @@ from UTIL.tensor_ops import _2tensor
 from UTIL.colorful import *
 from imitation.utils import print_dict
 
-from imitation_bc.bc import AlgorithmConfig, TrainerBase
+from .conf import AlgorithmConfig
+from imitation.trainer_base import TrainerBase
 
 class wasd_xy_Trainer(TrainerBase):
+    def __init__(self, policy: torch.nn.Module):
+        super().__init__(AlgorithmConfig.logdir, AlgorithmConfig.device)
+        self.policy = policy
+        self.policy.to(AlgorithmConfig.device)
+        self.lr = AlgorithmConfig.lr
+        self.all_parameter = list(policy.named_parameters())
+
+        # if not self.freeze_body:
+        self.parameter = [p for p_name, p in self.all_parameter]
+        # self.optimizer = optim.Adam(self.parameter, lr=self.lr)
+        self.optimizer = optim.SGD(self.parameter, lr=self.lr)
+
+        self.sheduler = None
+        if AlgorithmConfig.lr_sheduler:
+            # def linear_decay(epoch):
+            #     coef = max(1. - epoch/1000, 0.)
+            #     return max(coef, AlgorithmConfig.lr_sheduler_min_lr/AlgorithmConfig.lr)
+            def linear_decay_and_jump(epoch):
+                coef = max(1. - epoch/5000, 0.)
+                min_coef = AlgorithmConfig.lr_sheduler_min_lr/AlgorithmConfig.lr
+                if coef <= min_coef:
+                    coef = min_coef + max(0, float(np.sin(epoch/500))) * (1-min_coef) * 0.25
+                return coef
+            self.sheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=linear_decay_and_jump)
+
+        self.epoch_cnt = 0
+        self.logs = []
+        self.mcv = AlgorithmConfig.mcom
+
+
+
     def train_on_data_(self, data: dict):
         """ BC """
         num_epoch = AlgorithmConfig.num_epoch_per_update

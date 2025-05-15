@@ -293,7 +293,7 @@ class safe_load_traj_pool:
 
 def get_container_from_traj_pool(traj_pool, req_dict_rename, req_dict=None):
     container = {}
-    if req_dict is None: req_dict = ['avail_act', 'obs', 'action', 'actionLogProb', 'return', 'reward', 'value']
+    if req_dict is None: req_dict = ['obs', 'action', 'action_index', 'actionLogProb', 'return', 'reward', 'value']
     assert len(req_dict_rename) == len(req_dict)
 
     # replace 'obs' to 'obs > xxxx'

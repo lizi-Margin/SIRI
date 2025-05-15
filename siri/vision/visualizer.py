@@ -79,7 +79,7 @@ class Visualizer(threading.Thread):
                         self.obs_act_data = []
 
                 if (self.video_writer is None) and ((sv_source is not None) and (obs_act is not None)):
-                    save_video = f"{self.__class__.__name__}-{time.strftime("%Y%m%d-%H%M%S")}.mp4"
+                    save_video = f"Visualizer_record/{self.__class__.__name__}-{time.strftime("%Y%m%d-%H%M%S")}.mp4"
                     h, w, _ = annotated_frame.shape
                     self.frame_size = (w, h)
                     fourcc = cv2.VideoWriter_fourcc(*'mp4v')

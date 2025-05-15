@@ -307,7 +307,7 @@ class StateMachine(StateMachineBase):
 
         self.USE_MODEL = True
         if self.USE_MODEL:
-            from imitation.net import NetActor, LSTMNet
+            from imitation_bc_old.net import NetActor, LSTMNet
             self.model_tick = 0.1
             self.model = NetActor(LSTMNet).to('cuda')
             self.model.load_model("./imitation_TRAIN/BC/model-LSTMNet-sample=50-pretrained-13856-augft.pt")
@@ -541,12 +541,19 @@ class AgentStateMachine(StateMachineBase):
         # self.model = DVNetDual_CA().to(cfg.device)
         # self.model.load_model("./imitation_TRAIN/BC/model-DVNetDual_CA-nav-old-pure-pp19-classic-pp19-25000.pt")
 
-        from imitation_bc.map_net import DoubleBranchMapNet
-        self.model = DoubleBranchMapNet().to(cfg.device)
-        self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-p-15000.pt"); self.model.__class__.use_map_aug = True
+        # from imitation_bc.map_net import DoubleBranchMapNet
+        # self.model = DoubleBranchMapNet().to(cfg.device)
+        # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-p-15000.pt"); self.model.__class__.use_map_aug = True
         # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000.pt"); self.model.__class__.use_map_aug = True
         # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet-nop-p19-cp19-32880.pt"); self.model.__class__.use_map_aug = False
         # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-binary_coef=20-16000.pt"); self.model.__class__.use_map_aug = True
+
+        from imitation_airl.AC import DoubleBranchMapAC
+        self.model = DoubleBranchMapAC().to(cfg.device)
+        # self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapAC(aug)-p-10000.pt')
+        self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapAC(aug)-p-5000.pt')
+        # self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-p-15000-AC-trained-16640.pt')
+        # self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-p-15000-AC-trained-25000.pt')
 
         self.model.eval()
         # self.model.net.reset()

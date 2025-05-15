@@ -464,7 +464,9 @@ class Detector(threading.Thread):
     def detect_ammo(self, frame):
         h, w, _ = frame.shape
         left_trim = 70
-        ammo_feild = frame[h-67:h-49, w//2-left_trim: w//2-22]
+        top_trim = 67 - 2
+        btm_trim = 49 - 2
+        ammo_feild = frame[h-top_trim:h-btm_trim, w//2-left_trim: w//2-22]
         gray = cv2.cvtColor(ammo_feild, cv2.COLOR_BGR2GRAY)
 
         gray = cv2.convertScaleAbs(gray, alpha=1.5, beta=0)
@@ -485,11 +487,11 @@ class Detector(threading.Thread):
 
         # print text to frame
         if text:
-            cv2.putText(frame, text, (w//2-left_trim, h-67), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        cv2.rectangle(frame, (w//2-left_trim, h-67), (w//2-22, h-49), (0, 255, 0), 1)
+            cv2.putText(frame, text, (w//2-left_trim, h-top_trim), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.rectangle(frame, (w//2-left_trim, h-top_trim), (w//2-22, h-btm_trim), (0, 255, 0), 1)
         gray = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
         cv2.imwrite('gray.png', gray)
-        frame[h-67:h-49, w//2-left_trim: w//2-22] = gray
+        frame[h-top_trim:h-btm_trim, w//2-left_trim: w//2-22] = gray
         return (in_mag_ammo, all_ammo,), frame
 
  
