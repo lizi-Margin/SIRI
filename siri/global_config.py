@@ -27,7 +27,7 @@ class GlobalConfig:
 
     plt = 'qt'
 
-    yolo_plt = True
+    yolo_plt = False
 
 class GloablStatus:
     monitor = None

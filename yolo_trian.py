@@ -23,6 +23,12 @@ def train(model, dataset_yaml):
     # print(train_results)
     # print(metrics)
 
+def predict_and_save(model, image_path, output_path):
+    image = cv2.imread(image_path)
+    results = model.predict(image)
+    plotted_image = results[0].plot()
+    cv2.imwrite(output_path, plotted_image)
+    print(f"Saved prediction result to {output_path}")
 
 if __name__ == '__main__':
     # dataset_name = 'ScrGrabber-tick1-sunone-compat'
@@ -38,6 +44,5 @@ if __name__ == '__main__':
     image = cv2.imread("./pic_assets/in.jpg")
     image1 = cv2.imread("./pic_assets/in1.jpg")
 
-    detector = Detector(model) 
-    detector.predict_and_plot(image)
-    detector.predict_and_plot(image1)
+    predict_and_save(model, "./pic_assets/in.jpg", "./prediction_in.jpg")
+    predict_and_save(model, "./pic_assets/in1.jpg", "./prediction_in1.jpg")

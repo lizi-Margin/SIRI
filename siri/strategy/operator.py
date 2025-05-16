@@ -729,16 +729,21 @@ class AgentStateMachine(StateMachineBase):
         # if (not in_chase) and (not in_search) and is_pressing():
         #     unpress_kb_bt()
         
-
-        for k in ['w', 'a', 's', 'd']:
-            if act_dict[k] > 0:
-                if self.in_press[k] <= 0: 
-                    KB.kb.press(k)
-                    self.in_press[k] = 1
-            else: 
-                if self.in_press[k] > 0:
-                    KB.kb.release(k)
-                    self.in_press[k] = 0
+        if (act_dict['w'] > 0) or (act_dict['a'] > 0) or (act_dict['s'] > 0) or (act_dict['d'] > 0):
+            for k in ['w', 'a', 's', 'd']:
+                if act_dict[k] > 0:
+                    if self.in_press[k] <= 0: 
+                        KB.kb.press(k)
+                        self.in_press[k] = 1
+                else: 
+                    if self.in_press[k] > 0:
+                        KB.kb.release(k)
+                        self.in_press[k] = 0
+        else:
+            for key in ['w', 'a', 's', 'd']:
+                if self.in_press[key] > 0:
+                    KB.kb.release(key)
+                    self.in_press[key] = 0
                 
         if need_slp:
             # coef = 1.4            # mv_x, mv_y = mv_x * coef, mv_y * coef

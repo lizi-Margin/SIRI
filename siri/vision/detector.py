@@ -509,18 +509,18 @@ class Detector(threading.Thread):
         return in_, frame
         
 
-    def predict_and_plot(self, frame):
-        results = self._predict(frame)
-        for result in results:
-            result_frame = result.plot()
-            cv2.imshow("tmp", result_frame)
+    # def predict_and_plot(self, frame):
+    #     results = self._predict(frame)
+    #     for result in results:
+    #         result_frame = result.plot()
+    #         cv2.imshow("tmp", result_frame)
 
-            while True:
-                time.sleep(0.1)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+    #         while True:
+    #             time.sleep(0.1)
+    #             if cv2.waitKey(1) & 0xFF == ord('q'):
+    #                 break
 
-        cv2.destroyAllWindows()
+    #     cv2.destroyAllWindows()
 
     
     def predict_and_make_obs(self, frame):

@@ -16,7 +16,8 @@ def start():
     # model = YOLO(f"{cfg.root_dir}/model/sunxds_0.7.2.pt", task='detect')
     # model = YOLO(f"{cfg.root_dir}/model/ScrGrabber-tick1/50/best.pt", task='detect')
     # model = YOLO(f"{cfg.root_dir}/model/ScrGrabber-tick1+fe1/best.pt", task='detect')
-    model = YOLO(f"{cfg.root_dir}/model/ScrGrabber-tick1-sunone-compat/best.pt", task='detect')
+    # model = YOLO(f"{cfg.root_dir}/model/ScrGrabber-tick1-sunone-compat/best.pt", task='detect')
+    model = YOLO(f"{cfg.root_dir}/model/ScrGrabber+HMP_IL-sunone-compat/best.pt", task='detect')
 
     visualizer = Visualizer()
     operator = Operator(draw_action_hook=visualizer.draw_obs_act)
