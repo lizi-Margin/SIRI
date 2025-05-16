@@ -8,6 +8,7 @@ from UTIL.colorful import *
 from imitation.utils import print_dict
 from siri.utils.logger import lprint_
 
+from imitation.utils import get_container_from_traj_pool, safe_load_traj_pool
 from .conf import  AlgorithmConfig
 from imitation.trainer_base import TrainerBase
 
@@ -47,11 +48,15 @@ class Trainer(TrainerBase):
         self.scaler = torch.GradScaler('cuda', init_scale = 2.0**16)
 
     def train_on_data(self, traj_pool, task):
-        pass
+        req_dict = ['obs', 'action_index']
+        req_dict_rename = req_dict
+        container = get_container_from_traj_pool(traj_pool, req_dict_rename, req_dict=req_dict)
+        container['obs'] = self.policy.get_frame_centers(container['obs'])
+        return self.train_on_data_(container, num_epoch=25)
 
-    def train_on_data_(self, data: dict):
+    def train_on_data_(self, data: dict, num_epoch=None):
         """ BC """
-        num_epoch = AlgorithmConfig.num_epoch_per_update
+        if num_epoch is None: num_epoch = AlgorithmConfig.num_epoch_per_update
         assert 'obs' in data
         all_obs = data.pop('obs')
         assert 'obs' not in data
@@ -119,14 +124,17 @@ class Trainer(TrainerBase):
         return update_cnt
 
     def establish_torch_graph(self, obs, act):
-        index_x = _2tensor(act['x'])
-        index_y = _2tensor(act['y'])
-        index_wasd = _2tensor(act['wasd'])
-        action_index = torch.cat([
-            index_wasd.unsqueeze(1), 
-            index_x.unsqueeze(1), 
-            index_y.unsqueeze(1)
-        ], dim=1)
+        if 'action_index' in act:
+            action_index = _2tensor(act['action_index'])
+        else:
+            index_x = _2tensor(act['x'])
+            index_y = _2tensor(act['y'])
+            index_wasd = _2tensor(act['wasd'])
+            action_index = torch.cat([
+                index_wasd.unsqueeze(1), 
+                index_x.unsqueeze(1), 
+                index_y.unsqueeze(1)
+            ], dim=1)
 
         value, actLogProbs, distEntropy, probs = \
             self.policy.evaluate_actions(

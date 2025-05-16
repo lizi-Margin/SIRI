@@ -64,34 +64,36 @@ class ReinforceAlgorithmFoundation:
             (redirect to shell_env to help with history rolling)
         '''
         self.policy.eval()
+        human_active = State['human_active']
 
         # read obs
         frames = State['obs']
         obs = self.policy.get_frame_centers(frames)
         done = State['done']
 
-        # make decision
-        wasd, xy, info = self.policy.act(frames=frames, frame_centers=obs)
-        index_x = info['index_x']; assert isinstance(index_x, int), f"type: {type(index_x)}"
-        index_y = info['index_y']; assert isinstance(index_y, int), f"type: {type(index_y)}"
-        index_wasd = info['index_wasd']; assert isinstance(index_wasd, int), f"type: {type(index_wasd)}"
-        # from .map_net_base import x_box, y_box
+        if not human_active:
+            # make decision
+            wasd, xy, info = self.policy.act(frames=frames, frame_centers=obs)
+            action = (wasd, xy,)
+            # index_x = info['index_x']; assert isinstance(index_x, int), f"type: {type(index_x)}"
+            # index_y = info['index_y']; assert isinstance(index_y, int), f"type: {type(index_y)}"
+            # index_wasd = info['index_wasd']; assert isinstance(index_wasd, int), f"type: {type(index_wasd)}"
+        else:
+            self.policy.reset()
+            wasd = State['rec']['act_wasd']
+            xy = State['rec']['xy']
+            action = (wasd, xy,)
+
+        index_x = self.policy.x_discretizer.discretize(State['rec']['xy'][0])
+        index_y = self.policy.y_discretizer.discretize(State['rec']['xy'][1])
+        index_wasd = self.policy.wasd_discretizer.action_to_index(State['rec']['act_wasd'])
+        
+
         index_xy = np.array([index_x, index_y])
-        index_xy_norm = np.array([index_x/12, index_y/4])
-        action = (wasd, xy,)
-        action_raw = np.concatenate([wasd, xy], axis=0)
-        action_for_reward = np.concatenate([wasd, index_xy_norm], axis=0)
+        # action_raw = np.concatenate([wasd, xy], axis=0)
         action_index = np.concatenate([np.array([index_wasd]), index_xy], axis=0)
         
-        actLogProbs = info['actLogProbs']
-        value = info['value']
 
-        fake_reward = np.array([0.0])
-        # generated_reward = self.reward_net.get_reward(
-        #     frames=frames,
-        #     frame_centers=obs,
-        #     actions=action_for_reward
-        # )
         if done:
             traj_frag = {
                 '_DONE_': True,      # 这表示episode结束
@@ -99,14 +101,7 @@ class ReinforceAlgorithmFoundation:
                 '_TOBS_': frames,  # 终止时的观察值
                 'obs': frames,
                 'action': action_index,
-                'action_for_reward': action_for_reward,
                 'action_index': action_index,
-                'action_raw': action_raw,
-                'actionLogProb': actLogProbs,
-                'value': value,
-                'reward': fake_reward,
-                'human_reward': fake_reward,
-                # 'generated_reward': generated_reward,
             }
         else:
             traj_frag = {
@@ -115,17 +110,10 @@ class ReinforceAlgorithmFoundation:
                 '_TOBS_': None, 
                 'obs': frames,
                 'action': action_index,
-                'action_for_reward': action_for_reward,
                 'action_index': action_index,
-                'action_raw': action_raw,
-                'actionLogProb': actLogProbs,
-                'value': value,
-                'reward': fake_reward,
-                'human_reward': fake_reward,
-                # 'generated_reward': generated_reward,
             }
         traj_frag = self.hmap_multi_env_compat(traj_frag)
-        self.traj_manager.feed_traj_framedata(traj_frag, require_hook=False)
+        # self.traj_manager.feed_traj_framedata(traj_frag, require_hook=False)
         if done:
             print绿('[ReinforceAlgorithmFoundation] episode done, all nets reset')
             self.policy.reset()

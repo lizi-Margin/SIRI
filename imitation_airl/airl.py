@@ -89,7 +89,7 @@ class AIRL_PPO():
     def train_on_data_(self, policy_traj_pool, task):
         """ train AIRL """
         assert task == "train"
-        assert False, "failed"
+        # assert False, "failed"
 
         # train reward_net(disciminator)
         

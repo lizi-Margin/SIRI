@@ -29,3 +29,15 @@ class Sleeper:
             if self.user is not None:
                 buffer += f", caller is {self.user.__class__.__name__}"
             lprint(self, buffer)
+        
+    def sleep_one_of_n(self, n):
+        assert n > 0
+        sleep_time = self.tick - (time.time_ns() - self._start)/1e9
+        n_sleep_time = sleep_time/n
+        if sleep_time > 0:
+            time.sleep(n_sleep_time)
+        else:
+            buffer = f'warning: tick time out {sleep_time}s'
+            if self.user is not None:
+                buffer += f", caller is {self.user.__class__.__name__}"
+            lprint(self, buffer)

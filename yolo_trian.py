@@ -26,7 +26,7 @@ def train(model, dataset_yaml):
 
 if __name__ == '__main__':
     # dataset_name = 'ScrGrabber-tick1-sunone-compat'
-    dataset_name = 'ScrGrabber-tick1'
+    dataset_name = 'ScrGrabber+HMP_IL-sunone-compat'
     model_path = 'model/sunxds_0.7.2.pt'
 
     root_dir = cfg.root_dir
@@ -35,8 +35,8 @@ if __name__ == '__main__':
     train(model, dataset)
 
     
-    image = cv2.imread("./in.jpg")
-    image1 = cv2.imread("./in1.jpg")
+    image = cv2.imread("./pic_assets/in.jpg")
+    image1 = cv2.imread("./pic_assets/in1.jpg")
 
     detector = Detector(model) 
     detector.predict_and_plot(image)

@@ -100,7 +100,7 @@ class MapACBase(MapNetBase):
     def logit_from_to(logit, from_, to_):
         return logit[:, from_:to_]
 
-    def _logit2act(self, logit, sample=False,
+    def _logit2act(self, logit, argmax=True,
                    eval_mode=False, eval_actions=None):
         if eval_mode:
             assert eval_actions is not None
@@ -119,9 +119,10 @@ class MapACBase(MapNetBase):
         # dist_l = Bernoulli(logits=logit_l)
 
         if not eval_mode:
-            if not sample:
+            if argmax:
                 act_wasd = torch.argmax(logit_wasd, dim=-1)
                 act_x = torch.argmax(logit_x, dim=-1)
+                # act_x = dist_x.sample()
                 act_y = torch.argmax(logit_y, dim=-1)
                 # act_jump = torch.sigmoid(logit_jump) > 0.5,
                 # act_crouch = torch.sigmoid(logit_crouch) > 0.5,
@@ -221,11 +222,11 @@ class DoubleBranchMapAC(MapACBase):
         self.map_features, mt, _, _ = self.get_efficientnet_b5() 
         mh, mw = 8, 12
 
-        lstm_o_chns = t//2, mt//2
-        conv_lstm_layers = 2
+        # lstm_o_chns = t//2, mt//2
+        # conv_lstm_layers = 2
 
-        # lstm_o_chns = t, mt
-        # conv_lstm_layers = 1
+        lstm_o_chns = t, mt
+        conv_lstm_layers = 1
 
         self.conv_lstm = ConvLSTM(
             input_dim=t,
@@ -248,8 +249,8 @@ class DoubleBranchMapAC(MapACBase):
     def reset(self):
         self.hs = [None, None]
 
-    def forward(self, x, use_hs=False):
-        x, map_in = x
+    def forward(self, x_and_map, use_hs=False):
+        x, map_in = x_and_map # screen center of the game and the corner of map
         seq_len, channels, height, width = x.size() 
 
         x = torch.nan_to_num_(x, 0)
@@ -259,15 +260,15 @@ class DoubleBranchMapAC(MapACBase):
         map_features = self.map_features(map_in)
 
         if not use_hs:
-            hidden_state = None
-            map_hidden_state = None
+            hs = None
+            map_hs = None
         else:
-            hidden_state = self.hs[0]
-            map_hidden_state = self.hs[1]
+            hs = self.hs[0]
+            map_hs = self.hs[1]
 
 
-        o, hs = self.conv_lstm(features.unsqueeze(0), hidden_state=hidden_state)
-        map_o, map_hs = self.map_conv_lstm(map_features.unsqueeze(0), hidden_state=map_hidden_state)
+        o, hs = self.conv_lstm(features.unsqueeze(0), hidden_state=hs)
+        map_o, map_hs = self.map_conv_lstm(map_features.unsqueeze(0), hidden_state=map_hs)
         if use_hs: self.hs = [hs, map_hs]
         o = o[0].squeeze(0)
         map_o = map_o[0].squeeze(0)
@@ -280,4 +281,207 @@ class DoubleBranchMapAC(MapACBase):
         o = self.shared_head_layer(o)
 
         return self.act_head(o), self.value_head(o)
+
+
+
+
+class TransformerMapAC(MapACBase):
+    def __init__(self, max_seq_len=45):
+        super().__init__()
+        hid_size = 4096
+        self.hid_size = hid_size
+        self.max_seq_len = max_seq_len 
+
+        self.features, t, h, w = self.get_efficientnet_b5() 
+        self.map_features, mt, mh, mw = self.get_efficientnet_b5() 
+        mh, mw = 8, 12
+        
+        # 降维编码器
+        from imitation.impala import ImpalaStyleEncoder
+        self.encoder = ImpalaStyleEncoder(
+            in_shape=(t, h, w),
+            chns=[256, 512, 1024],
+            hidsize=hid_size
+        )
+        self.map_encoder = ImpalaStyleEncoder(
+            in_shape=(mt, mh, mw),
+            chns=[256, 512, 1024],
+            hidsize=hid_size//2
+        )
+        
+        # 使用改进后的TransformerBlock
+        from imitation.transformer import TransformerProcessor
+        self.temporal_processor = TransformerProcessor(
+            input_dim=hid_size, 
+            num_heads=8, 
+            num_layers=2,
+            max_seq_len=max_seq_len
+        )
+        self.map_temporal_processor = TransformerProcessor(
+            input_dim=hid_size//2, 
+            num_heads=4, 
+            num_layers=1,
+            max_seq_len=max_seq_len
+        )
+        
+        # 上下文记忆
+        self.hs = None  # 用于存储历史信息
+        self.current_seq_len = 0  # 当前记忆长度
+        
+        # 输出头初始化
+        total_size = hid_size + hid_size//2 
+        self.init_head(total_size)
+        
+    def reset(self):
+        """重置历史记忆"""
+        self.hs = None
+        self.current_seq_len = 0
+        
+    def _process_with_memory(self, x, processor, is_map=False):
+        """
+        带记忆的时序处理
+        Args:
+            x: 当前输入 (seq_len, features)
+            processor: TransformerBlock处理器
+            is_map: 是否是地图分支
+        """
+        if self.hs is None:
+            # 第一次调用，初始化记忆
+            self.hs = {
+                'main': None,
+                'map': None
+            }
+        
+        # 获取当前分支的记忆
+        branch = 'map' if is_map else 'main'
+        prev_memory = self.hs[branch]
+        
+        if prev_memory is None:
+            # 没有历史记忆，直接处理当前输入
+            combined = x.unsqueeze(0)  # (1, seq_len, features)
+            self.current_seq_len = x.size(0)
+        else:
+            # 合并历史记忆和当前输入
+            combined = torch.cat([prev_memory, x.unsqueeze(0)], dim=1)
+            self.current_seq_len = combined.size(1)
+            
+            # 如果超过最大长度，截断最早的记忆
+            if self.current_seq_len > self.max_seq_len:
+                combined = combined[:, -self.max_seq_len:, :]
+                self.current_seq_len = self.max_seq_len
+        
+        # 生成因果掩码
+        mask = None
+        if self.current_seq_len > 1:
+            mask = torch.triu(torch.ones(self.current_seq_len, self.current_seq_len), diagonal=1)
+            mask = mask.float().masked_fill(mask == 1, float('-inf')).to(x.device)
+        
+        # 通过Transformer处理
+        output = processor(combined, mask=mask)
+        
+        # 更新记忆
+        self.hs[branch] = output.detach()  # 分离计算图，避免梯度回传
+        
+        # 返回最后一步的输出
+        # return output[:, -x.size(0):, :].squeeze(0)
+        return output[:, -1:, :].squeeze(0)
+        
+    def forward(self, x_and_map, use_hs=False):
+        x, map_in = x_and_map
+        x = torch.nan_to_num(x, 0)
+        map_in = torch.nan_to_num(map_in, 0)
+        
+        # 特征提取
+        features = self.features(x)  # (seq_len, t, h, w)
+        map_features = self.map_features(map_in)  # (seq_len, mt, mh, mw)
+        
+        # 降维编码
+        encoded = self.encoder(features)  # (seq_len, hid_size)
+        map_encoded = self.map_encoder(map_features)  # (seq_len, hid_size//2)
+        
+        # 时序处理
+        if use_hs:
+            # 使用记忆模式，seq_len应为1
+            assert x.size(0) == 1, "In use_hs mode, seq_len must be 1"
+            
+            encoded = self._process_with_memory(encoded, self.temporal_processor)
+            map_encoded = self._process_with_memory(
+                map_encoded, self.map_temporal_processor, is_map=True
+            )
+        else:
+            # 普通模式，处理整个序列
+            seq_len = encoded.size(0)
+            
+            # 生成因果掩码
+            mask = None
+            if seq_len > 1:
+                mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1)
+                mask = mask.float().masked_fill(mask == 1, float('-inf')).to(x.device)
+            
+            encoded = self.temporal_processor(encoded.unsqueeze(0), mask=mask).squeeze(0)
+            map_encoded = self.map_temporal_processor(
+                map_encoded.unsqueeze(0), mask=mask
+            ).squeeze(0)
+        print(encoded.shape)
+        print(map_encoded.shape)
+        
+        # 合并特征
+        combined = torch.cat([encoded, map_encoded], dim=1)
+        combined = self.shared_head_layer(combined)
+        
+        # 输出头
+        return self.act_head(combined), self.value_head(combined)
+
+
+
+
+class SwinTMapAC(MapACBase):
+    def __init__(self, max_seq_len=45):
+        super().__init__()
+        hid_size = 4096
+        self.hid_size = hid_size
+        self.max_seq_len = max_seq_len
+
+        # 初始化SwinT主干网络
+        self.features = self.get_swint_backbone()
+        self.map_features = self.get_swint_backbone(shallow=True)
+        
+        # 获取特征维度 (根据SwinT结构调整)
+        t, h, w = 768, 6, 6  # 主分支输出形状 (400x189输入)
+        mt, mh, mw = 384, 3, 3  # 小地图分支输出 (181x124输入)
+        
+
+    def get_swint_backbone(self, shallow=False) -> nn.Module:
+        """构建SwinT主干网络"""
+        from torchvision.models import swin_t, Swin_T_Weights
+        model = swin_t(weights=Swin_T_Weights.IMAGENET1K_V1)
+        
+        # 分解特征提取部分
+        layers = list(model.children())[:-2]  # 移除最后的head和norm
+        
+        # 构建特征提取器
+        feature_extractor = nn.Sequential(
+            *layers[:4] if shallow else layers,
+            # 添加自适应池化保证输出尺寸一致
+            nn.AdaptiveAvgPool2d((6, 6) if not shallow else (3, 3))
+        )
+        
+        # # 冻结部分层 (可选)
+        # for param in feature_extractor[:3].parameters():
+        #     param.requires_grad = False
+
+        # # 获取特征维度 (根据SwinT结构调整)
+        # t, h, w = 768, 6, 6  # 主分支输出形状 (400x189输入)
+        # mt, mh, mw = 384, 3, 3  # 小地图分支输出 (181x124输入)           
+        return feature_extractor
     
+    def preprocess_input(self, x: torch.Tensor, is_map: bool = False) -> torch.Tensor:
+        """输入预处理"""
+        # 标准化 (使用ImageNet统计量)
+        mean = torch.tensor([0.485, 0.456, 0.406], device=x.device).view(1,3,1,1)
+        std = torch.tensor([0.229, 0.224, 0.225], device=x.device).view(1,3,1,1)
+        x = (x - mean) / std
+        
+        # 调整尺寸 (SwinT需要32的倍数)
+        target_size = (384, 192) if not is_map else (128, 64)
+        return nn.functional.interpolate(x, size=target_size, mode='bilinear')

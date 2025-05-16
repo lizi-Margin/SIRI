@@ -48,7 +48,7 @@ class wasd_Discretizer():
                 ret[i] = self.action_to_index_(action[i])
             return ret
         else:
-            return self.action_to_index_(ret)
+            return self.action_to_index_(action)
 
     def get_discrete_space(self):
         return spaces.Discrete(self.n_actions)

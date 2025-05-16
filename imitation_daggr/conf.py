@@ -15,6 +15,29 @@ def get_a_logger():
 class AlgorithmConfig:
     logdir = './imitation_TRAIN/DAggr/'
     device = 'cuda:0'
+    # device = 'cpu'
+
+    train_traj_needed = 10
+    prevent_batchsize_oom = False
+    gamma_in_reward_forwarding = False
+    gamma_in_reward_forwarding_value = 0.99
+    gamma = 0.99
+    tau = 0.95
+    train_traj_needed = 2
+    TakeRewardAsUnity = False
+    use_normalization = True
+    add_prob_loss = False
+    n_entity_placeholder = 10
+    load_checkpoint = False
+    load_specific_checkpoint = ''
+    clip_param = 0.2
+    ppo_epoch = 16
+    n_pieces_batch_division = 1
+    value_loss_coef = 0.1
+    entropy_coef = 0.05
+    max_grad_norm = 0.5
+    clip_param = 0.2
+
 
     show_preprocessed_preview = False
 
@@ -27,8 +50,8 @@ class AlgorithmConfig:
     # sample_size_max = 80
 
     # behavior cloning part
-    lr = 0.01
-    lr_sheduler_min_lr = 0.001
+    lr = 0.005
+    lr_sheduler_min_lr = 0.0005
     # lr = 0.005 
     # lr_sheduler_min_lr = 0.0008
     lr_sheduler = True  # whether to use lr_sheduler

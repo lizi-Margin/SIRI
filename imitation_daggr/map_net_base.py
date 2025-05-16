@@ -72,7 +72,7 @@ class MapNetBase(nn.Module):
 
             
         map_t = torch.stack([map_trans(img) for img in map_imgs])
-        map_t = map_t.to('cuda').float()
+        map_t = map_t.to(AlgorithmConfig.device).float()
 
         def trans(image):
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -81,7 +81,7 @@ class MapNetBase(nn.Module):
             assert image.shape[0] == 3
             return image
         center_t = torch.stack([trans(img) for img in center_imgs])
-        center_t = center_t.to('cuda').float()
+        center_t = center_t.to(AlgorithmConfig.device).float()
 
         
 

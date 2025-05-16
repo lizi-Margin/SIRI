@@ -27,35 +27,35 @@ class trajectory(TRAJ_BASE):
     def cut_tail(self):
         # 删去多余的预留空间
         super().cut_tail()
-        TJ = lambda key: getattr(self, key)
-        # 进一步地， 根据这个轨迹上的NaN，删除所有无效时间点
-        reference_track = getattr(self, self.reference_track_name)
-        if self.need_reward_bootstrap:
-            assert False, ('it should not go here if everything goes as expected')
-            # print('need_reward_bootstrap') 找到最后一个不是nan的位置
-            T = np.where(~np.isnan(reference_track.squeeze()))[0][-1]
-            self.boot_strap_value = {
-                'bootstrap_value':TJ('value').squeeze()[T].copy(), 
-            }
-            assert not hasattr(self,'tobs')
-            self.set_terminal_obs(TJ('g_obs')[T].copy())
-            reference_track[T] = np.nan
-        # deprecated if nothing in it
-        p_invalid = np.isnan(my_view(reference_track, [0, -1])).any(axis=-1)
-        p_valid = ~p_invalid
-        if p_invalid.all(): #invalid traj
-            self.deprecated_flag = True
-            return
-        # adjust reward position
-        reward = TJ('reward')
-        for i in reversed(range(self.time_pointer)):
-            if p_invalid[i] and i != 0: # invalid, push reward forward
-                reward[i-1] += reward[i]; reward[i] = np.nan
-        setattr(self, 'reward', reward)
-        # clip NaN
-        for key in self.key_dict: setattr(self, key, TJ(key)[p_valid])
-        # all done
-        return
+        # TJ = lambda key: getattr(self, key)
+        # # 进一步地， 根据这个轨迹上的NaN，删除所有无效时间点
+        # reference_track = getattr(self, self.reference_track_name)
+        # if self.need_reward_bootstrap:
+        #     assert False, ('it should not go here if everything goes as expected')
+        #     # print('need_reward_bootstrap') 找到最后一个不是nan的位置
+        #     T = np.where(~np.isnan(reference_track.squeeze()))[0][-1]
+        #     self.boot_strap_value = {
+        #         'bootstrap_value':TJ('value').squeeze()[T].copy(), 
+        #     }
+        #     assert not hasattr(self,'tobs')
+        #     self.set_terminal_obs(TJ('g_obs')[T].copy())
+        #     reference_track[T] = np.nan
+        # # deprecated if nothing in it
+        # p_invalid = np.isnan(my_view(reference_track, [0, -1])).any(axis=-1)
+        # p_valid = ~p_invalid
+        # if p_invalid.all(): #invalid traj
+        #     self.deprecated_flag = True
+        #     return
+        # # adjust reward position
+        # reward = TJ('reward')
+        # for i in reversed(range(self.time_pointer)):
+        #     if p_invalid[i] and i != 0: # invalid, push reward forward
+        #         reward[i-1] += reward[i]; reward[i] = np.nan
+        # setattr(self, 'reward', reward)
+        # # clip NaN
+        # for key in self.key_dict: setattr(self, key, TJ(key)[p_valid])
+        # # all done
+        # return
 
     def reward_push_forward(self, dead_mask):
         # self.new_reward = self.reward.copy()
@@ -155,7 +155,7 @@ class TrajPoolManager(object):
         for traj_handle in pool:
             traj_handle.cut_tail()
         pool = list(filter(lambda traj: not traj.deprecated_flag, pool))
-        for traj_handle in pool: traj_handle.finalize()
+        # for traj_handle in pool: traj_handle.finalize()
         self.cnt += 1
         task = ['train']
         return task, pool
@@ -244,6 +244,7 @@ class BatchTrajManager(TrajManagerBase):
         self.traj_limit = traj_limit
         self.train_traj_needed = AlgorithmConfig.train_traj_needed
         self.pool_manager = TrajPoolManager()
+        self.last_traj_num = -1
 
     def update(self, traj_frag, index):
         assert traj_frag is not None
@@ -295,11 +296,12 @@ class BatchTrajManager(TrajManagerBase):
             Try saving trj_pool for behavior cloning.
         """
         pool_name = f"{self.__class__.__name__}--limit={self.traj_limit}-{time.strftime("%Y%m%d-%H:%M:%S")}"
-        safe_dump_traj_pool(self.traj_pool, pool_name, traj_dir=f"HMP_IL/AIRL/traj_pool/{time.strftime("%Y%m%d-%H:%M:%S")}/")
+        safe_dump_traj_pool(self.traj_pool, pool_name, traj_dir=f"HMP_IL/DAggr/traj_pool/{time.strftime("%Y%m%d-%H:%M:%S")}/")
 
         
     def train_and_clear_traj_pool(self):
         print('do update %d'%self.update_cnt)
+        self.last_traj_num = len(self.traj_pool)
 
         # from imitation.utils import print_list, save_container, get_container_from_traj_pool
         # print亮黄("traj_pool raw")
@@ -316,13 +318,15 @@ class BatchTrajManager(TrajManagerBase):
         for current_task in current_task_l:
             ppo_update_cnt = self.trainer_hook(self.traj_pool, current_task)
 
-        self.traj_pool = []
+        if len(self.traj_pool) > 50:
+            self.traj_pool = self.traj_pool[:40]
         self.update_cnt += 1
         # assert ppo_update_cnt == self.update_cnt
         return self.update_cnt
 
     def can_exec_training(self):
-        if len(self.traj_pool) >= self.train_traj_needed:  return True
+        if (len(self.traj_pool) >= self.train_traj_needed) and (not len(self.traj_pool) == self.last_traj_num):  
+            return True
         else:  return False
  
     def unlock_fn(self, traj_frag):

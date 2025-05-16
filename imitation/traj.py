@@ -55,7 +55,7 @@ class TRAJ_BASE():
             content_type = first_content.dtype
             content_shape = first_content.shape
             if key in TRAJ_BASE.key_data_type: 
-                assert TRAJ_BASE.key_data_type[key] == content_type
+                assert TRAJ_BASE.key_data_type[key] == content_type, f"{key}, {TRAJ_BASE.key_data_type[key]}, {content_type}, {content_shape}"
             else: 
                 TRAJ_BASE.key_data_type[key] = content_type
                 TRAJ_BASE.key_data_shape[key] = content_shape
