@@ -5,16 +5,20 @@ SIRI (Swift Insight Reinforce-Imitate) Agent is an AI system that performs visua
 ## Demos
 ### SIRI-Agent Gameplay Demonstrations
 1. [Bilibili Video](https://www.bilibili.com/video/BV1usE4zdERM)
+
  [![Bilibili视频封面](https://i0.hdslb.com/bfs/archive/7ad194e6189a2d9f951f6f4a1ae42de45cd7a4ec.jpg@672w_378h_1c.avif)](https://www.bilibili.com/video/BV1usE4zdERM)
 
 
 2. Combat Situation 1
+
 <img src="assets/demo1_preview.gif" width="600"/>
 
 3. Combat Situation 2 (short)
+
 <img src="assets/demo2_preview.gif" width="600"/>
 
 4. Combat Situation 3 (short)
+
 <img src="assets/demo3_preview.gif" width="600"/>
 
 ### Rule-based Method Comparison
