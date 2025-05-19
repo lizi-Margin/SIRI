@@ -516,6 +516,8 @@ class AgentStateMachine(StateMachineBase):
 
         self.model_tick = 0.1
         self.model_xy_trim = 1.0
+        self.model_max_time = 45 * 0.1 * 1.5
+        self.model_last_reset_time = -1
 
         # from imitation.net import NetActor, LSTMNet
         # self.model = NetActor(LSTMNet).to(cfg.device)
@@ -654,6 +656,9 @@ class AgentStateMachine(StateMachineBase):
                 if self._search_start_t_ is None:
                     self._start_search()
                     self.model.reset()
+                if (self.model_last_reset_time == -1) or (time.time() - self.model_last_reset_time > self.model_max_time):
+                    self.model.reset()
+                    self.model_last_reset_time = time.time()
                 
                 o = self.model.act([frame])
                 if len(o) == 2:

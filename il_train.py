@@ -92,7 +92,7 @@ if __name__ == '__main__':
         'traj-Grabber-tick=0.1-limit=200-pure',
         'traj-Grabber-tick=0.1-limit=200-old',
         'traj-Grabber-tick=0.1-limit=200-classic-pp19',
-    ], N_LOAD=500)
+    ], N_LOAD=370)
 
     train_on([
         'traj-Grabber-tick=0.1-limit=200-pure',
