@@ -23,7 +23,7 @@ from siri.utils.sleeper import Sleeper
 
 class ObsMaker:
     def __init__(self):
-        pass
+        self.last_id = None
 
     def __call__(self, *args, **kwds):
         return self.make_obs(*args, **kwds)
@@ -55,10 +55,11 @@ class ObsMaker:
 
             return None
         elif isinstance(detections, tuple):
-            boxes_array, classes_tensor = detections
+            boxes_array, classes_tensor, tracker_id = detections
             assert isinstance(boxes_array, torch.Tensor)
             assert isinstance(classes_tensor, torch.Tensor)
-            target = self.find_best_target(boxes_array, classes_tensor)
+            assert isinstance(tracker_id, torch.Tensor)
+            target = self.find_best_target(boxes_array, classes_tensor, tracker_id)
             if target:
                 obs = {
                     'xy': (target.x, target.y,),
@@ -70,28 +71,32 @@ class ObsMaker:
                 return None
         else:
             assert False, 'WTF?'
+        
+    @staticmethod
+    def find_tracker_id(id, all_tracker_id):
+        for i, this_id in enumerate(all_tracker_id):
+            if id == this_id:
+                return i
+        return -1
     
-    def find_best_target(self, boxes_array, classes_tensor):
-        return self.find_nearest_target_to(
-            GloablStatus.in_window_center_xy(),
-            boxes_array,
-            classes_tensor
-        )
-    
-    def find_nearest_target_to(self, xy:tuple, boxes_array, classes_tensor,):
-        center = torch.tensor([xy[0], xy[1]], device=cfg.device)
-        distances_sq = torch.sum((boxes_array[:, :2] - center) ** 2, dim=1)
-        # weights = torch.ones_like(distances_sq)
+    def find_best_target(self, boxes_array, classes_tensor, tracker_id):
+        # print("last_id: ", self.last_id)
+        last_idx = self.find_tracker_id(self.last_id, tracker_id) if self.last_id is not None else -1
+        if last_idx < 0:
+            target, nearest_idx = self.find_nearest_target_to(
+                GloablStatus.in_window_center_xy(),
+                boxes_array,
+                classes_tensor
+            )
+            self.last_id = tracker_id[nearest_idx]
+        else:
+            target = self.get_target_on_idx(last_idx, boxes_array, classes_tensor)
+        return target
 
-        # head_mask = classes_tensor == 7
-        # if head_mask.any():
-        #     nearest_idx = torch.argmin(distances_sq[head_mask])
-        #     nearest_idx = torch.nonzero(head_mask)[nearest_idx].item()
-        # else:
-        nearest_idx = torch.argmin(distances_sq)
-
-        target_data = boxes_array[nearest_idx, :4].cpu().numpy()
-        target_class = classes_tensor[nearest_idx].item()
+    @staticmethod
+    def get_target_on_idx(idx, boxes_array, classes_tensor):
+        target_data = boxes_array[idx, :4].cpu().numpy()
+        target_class = classes_tensor[idx].item()
         """
         names:
             0: player
@@ -107,6 +112,19 @@ class ObsMaker:
             10: third_person
         """
         return Target(*target_data, target_class)
+    
+    def find_nearest_target_to(self, xy:tuple, boxes_array, classes_tensor,):
+        center = torch.tensor([xy[0], xy[1]], device=cfg.device)
+        distances_sq = torch.sum((boxes_array[:, :2] - center) ** 2, dim=1)
+        # weights = torch.ones_like(distances_sq)
+
+        # head_mask = classes_tensor == 7
+        # if head_mask.any():
+        #     nearest_idx = torch.argmin(distances_sq[head_mask])
+        #     nearest_idx = torch.nonzero(head_mask)[nearest_idx].item()
+        # else:
+        nearest_idx = torch.argmin(distances_sq)
+        return self.get_target_on_idx(nearest_idx, boxes_array, classes_tensor), nearest_idx
 
     @staticmethod
     def convert_sv_to_tensor(frame: sv.Detections):
@@ -546,9 +564,11 @@ class Detector(threading.Thread):
         
         sv_detections = sv.Detections.from_ultralytics(result)
         sv_detections = self.tracker.update_with_detections(sv_detections)
+        
 
         enemy_boxes = []
         classes_tensor = []
+        tracker_id = []
         annotated = False
         for i, (x1, y1, x2, y2) in enumerate(sv_detections.xyxy):
             if sv_detections.class_id[i] == 0:
@@ -556,6 +576,7 @@ class Detector(threading.Thread):
                 if is_enm:
                     enemy_boxes.append(to_int([(x1 + x2)/2, (y1 + y2)/2, x2-x1, y2-y1]))  # x_center, y_center, w, h
                     classes_tensor.append(sv_detections.class_id[i])
+                    tracker_id.append(sv_detections.tracker_id[i])
                 annotated = True
             elif sv_detections.class_id[i] == 7:
                 pass
@@ -576,7 +597,8 @@ class Detector(threading.Thread):
         if len(enemy_boxes) > 0:
             boxes_tensor = torch.tensor(enemy_boxes, dtype=torch.float32, device=cfg.device)
             classes_tensor = torch.tensor(classes_tensor, dtype=torch.float32, device=cfg.device)
-            obs.update(self.make_obs((boxes_tensor, classes_tensor,)))
+            tracker_id = torch.tensor(tracker_id, dtype=torch.float32, device=cfg.device)
+            obs.update(self.make_obs((boxes_tensor, classes_tensor, tracker_id)))
 
         if self.obs_hook is not None:
             self.obs_hook(obs)
