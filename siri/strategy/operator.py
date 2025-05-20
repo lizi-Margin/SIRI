@@ -185,8 +185,11 @@ class pid_ctler:
 class Aimer:
     def __init__(self):
         self.pid = pid_ctler()
-        self.kx_p, self.kx_i, self.kx_d = 0.175, 0.5, 0.04
-        self.ky_p, self.ky_i, self.ky_d = 0.20, 0.5, 0.0125
+        # self.kx_p, self.kx_i, self.kx_d = 0.175, 0.5, 0.04
+        # self.ky_p, self.ky_i, self.ky_d = 0.20, 0.5, 0.0125
+
+        self.kx_p, self.kx_i, self.kx_d = 0.10, 0.3, 0.04
+        self.ky_p, self.ky_i, self.ky_d = 0.10, 0.3, 0.0125
 
         self.last_output = np.array([0., 0.])
         self.n_coef = 0.8
@@ -516,7 +519,7 @@ class AgentStateMachine(StateMachineBase):
 
         self.model_tick = 0.1
         self.model_xy_trim = 1.0
-        self.model_max_time = 45 * 0.1 * 1.5
+        self.model_max_time = 45 * 0.1 * 1.2
         self.model_last_reset_time = -1
 
         # from imitation.net import NetActor, LSTMNet
@@ -567,6 +570,45 @@ class AgentStateMachine(StateMachineBase):
             'd': 0,
         }
 
+    def model_act(self, frame, ammo, act_dict):
+        if (self.model_last_reset_time == -1) or (time.time() - self.model_last_reset_time > self.model_max_time):
+            self.model.reset()
+            self.model_last_reset_time = time.time()
+        
+        o = self.model.act([frame])
+        if len(o) == 2:
+            wasd, xy = o
+            info = {}
+        else:
+            wasd, xy, info = o
+            # print(info)
+        xy = xy * self.model_xy_trim
+        limit = 500
+        mv_x, mv_y = norm(xy[0], lower_side=-limit, upper_side=limit), norm(xy[1], lower_side=-limit, upper_side=limit)
+        if wasd[0] > 0:
+            act_dict['w'] = 1
+        elif wasd[1] > 0:
+            act_dict['a'] = 1
+        elif wasd[2] > 0:
+            act_dict['s'] = 1
+        elif wasd[3] > 0:
+            act_dict['d'] = 1
+        
+        if (
+            (('reload' in info) and info['reload'])
+            or
+            ((0< ammo[0] < 30) and (ammo[1] > 30) and (ammo[0] != 4) and (random.uniform(0., 1.) < 0.2))
+        ):
+            act_dict['reload'] = 1
+            hit_kb_bt('r')
+        if ('jump' in info) and info['jump']:
+            act_dict['jump'] = 1
+            hit_kb_bt(' ')
+        if ('crouch' in info) and info['crouch']:
+            act_dict['crouch'] = 1
+            hit_kb_bt('c')
+        
+        return act_dict, mv_x, mv_y
 
     def step(self, obs: dict):
         assert 'in_scope' in obs
@@ -636,7 +678,6 @@ class AgentStateMachine(StateMachineBase):
             self._end_scope()
 
         in_search = False
-        in_chase = False
         need_slp = False
 
         if no_target:
@@ -647,7 +688,7 @@ class AgentStateMachine(StateMachineBase):
                 if random.uniform(0, 1) < 0.03:
                     act_dict = self.kb_sm_lesure.step(act_dict)
 
-            if self._last_fire_t > 1 and self._last_search_t > SEARCH_W_T:
+            if self._last_fire_t > 0.1 and self._last_search_t > SEARCH_W_T:
                 assert self.model_tick > cfg.tick
                 slp = Sleeper(tick = self.model_tick - cfg.tick)
                 need_slp = True
@@ -656,42 +697,8 @@ class AgentStateMachine(StateMachineBase):
                 if self._search_start_t_ is None:
                     self._start_search()
                     self.model.reset()
-                if (self.model_last_reset_time == -1) or (time.time() - self.model_last_reset_time > self.model_max_time):
-                    self.model.reset()
-                    self.model_last_reset_time = time.time()
                 
-                o = self.model.act([frame])
-                if len(o) == 2:
-                    wasd, xy = o
-                    info = {}
-                else:
-                    wasd, xy, info = o
-                    print(info)
-                xy = xy * self.model_xy_trim
-                limit = 500
-                mv_x, mv_y = norm(xy[0], lower_side=-limit, upper_side=limit), norm(xy[1], lower_side=-limit, upper_side=limit)
-                if wasd[0] > 0:
-                    act_dict['w'] = 1
-                elif wasd[1] > 0:
-                    act_dict['a'] = 1
-                elif wasd[2] > 0:
-                    act_dict['s'] = 1
-                elif wasd[3] > 0:
-                    act_dict['d'] = 1
-                
-                if (
-                    (('reload' in info) and info['reload'])
-                    or
-                    ((0< ammo[0] < 30) and ammo[1] > 30 and (random.uniform(0., 1.) < 0.6))
-                ):
-                    act_dict['reload'] = 1
-                    hit_kb_bt('r')
-                if ('jump' in info) and info['jump']:
-                    act_dict['jump'] = 1
-                    hit_kb_bt(' ')
-                if ('crouch' in info) and info['crouch']:
-                    act_dict['crouch'] = 1
-                    hit_kb_bt('c')
+                act_dict, mv_x, mv_y = self.model_act(frame, ammo, act_dict)
            
             # else:
             #     if self._last_search_t > SEARCH_W_T/2 and self._last_detect_t > 4:
@@ -722,6 +729,8 @@ class AgentStateMachine(StateMachineBase):
                     if self._scope_start_t_ is None:
                         self._scope_start_t_ = time.time()
                         mouse.click(Button.right)
+            else:
+                act_dict, _, _ = self.model_act(frame, ammo, act_dict)
             
             if self._fire_start_t_ is None:
                 if random.uniform(0, 1) < 0.1:
