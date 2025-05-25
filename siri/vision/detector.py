@@ -49,7 +49,8 @@ class ObsMaker:
                         # x, y = predict_xy(x, y)
                         obs = {
                             'xy': (x, y,),
-                            'cls': target.cls
+                            'cls': target.cls,
+                            # 'area':
                         }
                         return obs
 
@@ -81,17 +82,17 @@ class ObsMaker:
     
     def find_best_target(self, boxes_array, classes_tensor, tracker_id):
         # print("last_id: ", self.last_id)
-        last_idx = self.find_tracker_id(self.last_id, tracker_id) if self.last_id is not None else -1
-        if last_idx < 0:
+        # last_idx = self.find_tracker_id(self.last_id, tracker_id) if self.last_id is not None else -1
+        # if last_idx < 0:
             target, nearest_idx = self.find_nearest_target_to(
                 GloablStatus.in_window_center_xy(),
                 boxes_array,
                 classes_tensor
             )
             self.last_id = tracker_id[nearest_idx]
-        else:
-            target = self.get_target_on_idx(last_idx, boxes_array, classes_tensor)
-        return target
+        # else:
+        #     target = self.get_target_on_idx(last_idx, boxes_array, classes_tensor)
+            return target
 
     @staticmethod
     def get_target_on_idx(idx, boxes_array, classes_tensor):
@@ -508,7 +509,7 @@ class Detector(threading.Thread):
             cv2.putText(frame, text, (w//2-left_trim, h-top_trim), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         cv2.rectangle(frame, (w//2-left_trim, h-top_trim), (w//2-22, h-btm_trim), (0, 255, 0), 1)
         gray = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-        cv2.imwrite('gray.png', gray)
+        # cv2.imwrite('gray.png', gray)
         frame[h-top_trim:h-btm_trim, w//2-left_trim: w//2-22] = gray
         return (in_mag_ammo, all_ammo,), frame
 

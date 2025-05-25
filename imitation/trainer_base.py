@@ -37,13 +37,13 @@ class TrainerBase():
         print绿('save_model fin')
     
 
-    def load_model(self):
+    def load_model(self, pt_path=None):
         # if not os.path.exists('%s/history_cpt/' % self.logdir): 
         #     assert False, "file does not exists"
 
         # dir 1
         # pt_path = '%s/model-DoubleBranchMapAC(aug)-nop-p19-cp19-3000-单层ConvLSTM.pt' % self.logdir
-        pt_path = '%s/model.pt' % self.logdir
+        if not pt_path: pt_path = '%s/model.pt' % self.logdir
         cpt = torch.load(pt_path, map_location=self.device)
         if 'optimizer' not in cpt:
             self.policy.load_state_dict(cpt, strict=True)

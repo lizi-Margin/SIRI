@@ -25,6 +25,7 @@ from UTIL.colorful import *
 from imitation_daggr.bc import Trainer
 from imitation_daggr.AC import DoubleBranchMapAC as Net;NetActor = Net
 # from imitation_daggr.AC import TransformerMapAC as Net;NetActor = Net
+from imitation_daggr.AC import YoloMapAC as Net;NetActor = Net
 
 # CENTER_SZ_WH = NetActor.CENTER_SZ_WH
 # try:
@@ -38,7 +39,7 @@ trainer.load_model()
 from data_loader import data_loader_process
 
 def train_on(traj_dir, N_LOAD=2000):
-    n_traj = 20
+    n_traj = 2
     traj_reuse = 1
     # torch.rand(1)
     queue = mp.Queue(maxsize=2)
@@ -60,11 +61,15 @@ def train_on(traj_dir, N_LOAD=2000):
                 continue
         
         del datas
-        trainer.save_model()
+        if (i % 5 == 0) or (i == N_LOAD - 1):
+            print("save model")
+            trainer.save_model()
     loader_process.terminate()
 
 
 if __name__ == '__main__':
+    torch.set_num_threads(10)
+
     # train_on('traj-Grabber-tick=0.1-limit=200-nav', N_LOAD=2)
     # train_on('traj-Grabber-tick=0.1-limit=200-old', N_LOAD=12)
     # train_on('traj-Grabber-tick=0.1-limit=200-pure')
@@ -86,13 +91,13 @@ if __name__ == '__main__':
 
     # train_on('traj-Grabber-tick=0.1-limit=200-classic-pp19')
 
-    train_on([
-        'traj-Grabber-tick=0.1-limit=200-pp19',
-        'traj-Grabber-tick=0.1-limit=200-nav',
-        'traj-Grabber-tick=0.1-limit=200-pure',
-        'traj-Grabber-tick=0.1-limit=200-old',
-        'traj-Grabber-tick=0.1-limit=200-classic-pp19',
-    ], N_LOAD=370)
+    # train_on([
+    #     'traj-Grabber-tick=0.1-limit=200-pp19',
+    #     'traj-Grabber-tick=0.1-limit=200-nav',
+    #     'traj-Grabber-tick=0.1-limit=200-pure',
+    #     'traj-Grabber-tick=0.1-limit=200-old',
+    #     'traj-Grabber-tick=0.1-limit=200-classic-pp19',
+    # ], N_LOAD=370)
 
     train_on([
         'traj-Grabber-tick=0.1-limit=200-pure',

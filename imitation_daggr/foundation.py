@@ -84,35 +84,35 @@ class ReinforceAlgorithmFoundation:
             xy = State['rec']['xy']
             action = (wasd, xy,)
 
-        index_x = self.policy.x_discretizer.discretize(State['rec']['xy'][0])
-        index_y = self.policy.y_discretizer.discretize(State['rec']['xy'][1])
-        index_wasd = self.policy.wasd_discretizer.action_to_index(State['rec']['act_wasd'])
+        # index_x = self.policy.x_discretizer.discretize(State['rec']['xy'][0])
+        # index_y = self.policy.y_discretizer.discretize(State['rec']['xy'][1])
+        # index_wasd = self.policy.wasd_discretizer.action_to_index(State['rec']['act_wasd'])
         
 
-        index_xy = np.array([index_x, index_y])
-        # action_raw = np.concatenate([wasd, xy], axis=0)
-        action_index = np.concatenate([np.array([index_wasd]), index_xy], axis=0)
+        # index_xy = np.array([index_x, index_y])
+        # # action_raw = np.concatenate([wasd, xy], axis=0)
+        # action_index = np.concatenate([np.array([index_wasd]), index_xy], axis=0)
         
 
-        if done:
-            traj_frag = {
-                '_DONE_': True,      # 这表示episode结束
-                '_SKIP_': False,     # 不跳过这个数据
-                '_TOBS_': frames,  # 终止时的观察值
-                'obs': frames,
-                'action': action_index,
-                'action_index': action_index,
-            }
-        else:
-            traj_frag = {
-                '_DONE_': False, 
-                '_SKIP_': False, 
-                '_TOBS_': None, 
-                'obs': frames,
-                'action': action_index,
-                'action_index': action_index,
-            }
-        traj_frag = self.hmap_multi_env_compat(traj_frag)
+        # if done:
+        #     traj_frag = {
+        #         '_DONE_': True,      # 这表示episode结束
+        #         '_SKIP_': False,     # 不跳过这个数据
+        #         '_TOBS_': frames,  # 终止时的观察值
+        #         'obs': frames,
+        #         'action': action_index,
+        #         'action_index': action_index,
+        #     }
+        # else:
+        #     traj_frag = {
+        #         '_DONE_': False, 
+        #         '_SKIP_': False, 
+        #         '_TOBS_': None, 
+        #         'obs': frames,
+        #         'action': action_index,
+        #         'action_index': action_index,
+        #     }
+        # traj_frag = self.hmap_multi_env_compat(traj_frag)
         # self.traj_manager.feed_traj_framedata(traj_frag, require_hook=False)
         if done:
             print绿('[ReinforceAlgorithmFoundation] episode done, all nets reset')

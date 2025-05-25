@@ -553,12 +553,21 @@ class AgentStateMachine(StateMachineBase):
         # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet-nop-p19-cp19-32880.pt"); self.model.__class__.use_map_aug = False
         # self.model.load_model("./imitation_TRAIN/BC/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-binary_coef=20-16000.pt"); self.model.__class__.use_map_aug = True
 
-        from imitation_airl.AC import DoubleBranchMapAC
-        self.model = DoubleBranchMapAC().to(cfg.device)
+        # from imitation_airl.AC import DoubleBranchMapAC
+        # self.model = DoubleBranchMapAC().to(cfg.device)
         # self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapAC(aug)-p-10000.pt')
-        self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapAC(aug)-p-5000.pt')
+        # self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapAC(aug)-p-5000.pt')
         # self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-p-15000-AC-trained-16640.pt')
         # self.model.load_model('imitation_TRAIN/AIRL/model-DoubleBranchMapNet(aug)-nop-p19-cp19-30000-p-15000-AC-trained-25000.pt')
+
+        from imitation_daggr.AC import DoubleBranchMapAC
+        self.model = DoubleBranchMapAC().to(cfg.device)
+        self.model.load_model('imitation_TRAIN/DAggr/model-DoubleBranchMapNet(aug)-nop-p19-cp19-40000-p-5000.pt')
+        # self.model.load_model('imitation_TRAIN/DAggr/model-DoubleBranchMapNet(aug)-nop-p19-cp19-40000-p-25000.pt')
+
+        # from imitation_daggr.AC import YoloMapAC
+        # self.model = YoloMapAC().to(cfg.device)
+        # self.model.load_model('imitation_TRAIN/DAggr/model.pt')
 
         self.model.eval()
         # self.model.net.reset()
@@ -584,6 +593,7 @@ class AgentStateMachine(StateMachineBase):
             # print(info)
         xy = xy * self.model_xy_trim
         limit = 500
+        
         mv_x, mv_y = norm(xy[0], lower_side=-limit, upper_side=limit), norm(xy[1], lower_side=-limit, upper_side=limit)
         if wasd[0] > 0:
             act_dict['w'] = 1
@@ -597,7 +607,7 @@ class AgentStateMachine(StateMachineBase):
         if (
             (('reload' in info) and info['reload'])
             or
-            ((0< ammo[0] < 30) and (ammo[1] > 30) and (ammo[0] != 4) and (random.uniform(0., 1.) < 0.2))
+            ((0< ammo[0] < 30) and (ammo[1] > 30) and (ammo[0] != 4) and (self._last_fire_t > 5) and (random.uniform(0., 1.) < 0.2))
         ):
             act_dict['reload'] = 1
             hit_kb_bt('r')
@@ -685,7 +695,7 @@ class AgentStateMachine(StateMachineBase):
             ex, ey = self.aimer.calc_error(*GloablStatus.in_window_center_xy())
             mv_x, mv_y = self.aimer.calc_movement(ex, ey, False)
             if self._last_detect_t > 5:
-                if random.uniform(0, 1) < 0.03:
+                if random.uniform(0, 1) < 0.1:
                     act_dict = self.kb_sm_lesure.step(act_dict)
 
             if self._last_fire_t > 0.1 and self._last_search_t > SEARCH_W_T:
@@ -699,6 +709,8 @@ class AgentStateMachine(StateMachineBase):
                     self.model.reset()
                 
                 act_dict, mv_x, mv_y = self.model_act(frame, ammo, act_dict)
+                if self._last_detect_t < 1.5:
+                    mv_x, mv_y = 0., 0.
            
             # else:
             #     if self._last_search_t > SEARCH_W_T/2 and self._last_detect_t > 4:
@@ -732,7 +744,7 @@ class AgentStateMachine(StateMachineBase):
             else:
                 act_dict, _, _ = self.model_act(frame, ammo, act_dict)
             
-            if self._fire_start_t_ is None:
+            if (self._fire_start_t_ is None):
                 if random.uniform(0, 1) < 0.1:
                     act_dict = self.kb_sm_fight.step(act_dict)
 

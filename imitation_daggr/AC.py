@@ -5,7 +5,13 @@ import torch.nn.functional as F
 from torchvision.transforms import Compose
 from torch.distributions.bernoulli import Bernoulli
 from torch.distributions.categorical import Categorical
+from siri.vision.preprocess import crop_wh
+from imitation.utils import iterable_eq
 
+import cv2
+from imitation.transform import center_transform_train, center_transform_test, center_transform_train_f
+from typing import Union, List
+from .conf import AlgorithmConfig
 from imitation.conv_lstm import ConvLSTM
 
 from .map_net_base import x_box, y_box
@@ -283,7 +289,271 @@ class DoubleBranchMapAC(MapACBase):
         return self.act_head(o), self.value_head(o)
 
 
+class YoloMapAC(MapACBase):
+    @classmethod
+    def preprocess(cls, imgs: Union[np.ndarray, List[np.ndarray]], train=True) -> torch.Tensor: # to('cuda')
+        assert isinstance(imgs, list)
+        assert isinstance(imgs[0], (tuple, list,))
+        assert len(imgs[0]) == 3
+        center_imgs, map_imgs, raw_frames = [], [], []
+        for (center_img, map_img, raw_frame) in imgs:
+            center_imgs.append(center_img)
+            map_imgs.append(map_img)
+            raw_frames.append(raw_frame)
 
+        def raw_trans(image):
+            image = image[..., ::-1].transpose((2, 0, 1))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
+            image = np.ascontiguousarray(image)  # contiguous
+            image = torch.from_numpy(image).float().to(AlgorithmConfig.device) / 255.
+            assert image.shape[0] == 3
+            return image
+        raw_t = torch.stack([raw_trans(img) for img in raw_frames])
+        raw_t = raw_t.to(AlgorithmConfig.device).float()
+
+        def map_trans(image):
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            transform = center_transform_train if train else center_transform_test
+            image = transform(image)
+            assert image.shape[0] == 3
+            return image
+        map_t = torch.stack([map_trans(img) for img in map_imgs])
+        map_t = map_t.to(AlgorithmConfig.device).float()
+
+        def trans(image):
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            transform = center_transform_train if train else center_transform_test
+            image = transform(image)
+            assert image.shape[0] == 3
+            return image
+        center_t = torch.stack([trans(img) for img in center_imgs])
+        center_t = center_t.to(AlgorithmConfig.device).float()
+
+        
+
+        if not cls._showed and train:
+            for i in range(5):
+                center_0 = ((center_t[i].cpu().permute(1, 2, 0).numpy() + 1)/2 * 255).astype(np.uint8)[..., ::-1]
+                map_0 = ((map_t[i].cpu().permute(1, 2, 0).numpy() + 1)/2 * 255).astype(np.uint8)[..., ::-1]
+                raw_0 = ((raw_t[i].cpu().permute(1, 2, 0).numpy() + 1)/2 * 255).astype(np.uint8)[..., ::-1]
+                cv2.imshow('center', center_0)
+                cv2.imshow('map', map_0)
+                cv2.imshow('raw', raw_0)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+            cls._showed = True
+        return center_t, map_t, raw_t
+
+    
+    @classmethod
+    def get_yolo_field(cls, frame):
+        if not iterable_eq(frame.shape, (578, 1280, 3)):
+            print(f"[MapNetActor] Warning: input shape is {frame.shape}, use resize")
+            frame = cv2.resize(frame, (1280, 578))
+        assert frame.shape[0] == 578, frame.shape[1] == 1280
+        frame = crop_wh(frame, 240, 100)
+        assert frame.shape[0] == 378, frame.shape[1] == 800
+        frame = cv2.resize(frame, (384, 160,))
+        return frame
+
+    @classmethod
+    def get_center(cls, frame):
+        assert isinstance(frame, np.ndarray)
+        assert len(frame.shape) == 3
+        assert frame.shape[0] == 578
+        assert frame.shape[1] == 1280
+        assert frame.shape[2] == 3
+        return (cls.get_center_(frame.copy()), cls.get_map(frame.copy()), cls.get_yolo_field(frame))
+    
+    def get_yolo(self):
+        from ultralytics import YOLO
+        m = YOLO(model='best.pt').model.to(AlgorithmConfig.device)
+        for param in m.parameters():
+            param.requires_grad = False
+        return m
+
+
+    def __init__(self):
+        super().__init__()
+        self.features, t, h, w = self.get_efficientnet_b5() 
+        self.map_features, mt, _, _ = self.get_efficientnet_b5() 
+        mh, mw = 8, 12
+
+        self.yolo_features = self.get_yolo()
+        yt, yh, yw = 150, 10, 24
+        # yt, yh, yw = 18, 4, 10
+        # yt, yh, yw = 18, 18, 40
+        # yt, yh, yw = 54, 18, 40
+        
+
+        lstm_o_chns = t, mt, yt
+        conv_lstm_layers = 1
+        self.conv_lstm = ConvLSTM(
+            input_dim=t,
+            hidden_dim=lstm_o_chns[0],
+            kernel_size=(3, 3),
+            num_layers=conv_lstm_layers,
+            batch_first=True
+        )
+        self.map_conv_lstm = ConvLSTM(
+            input_dim=mt,
+            hidden_dim=lstm_o_chns[1],
+            kernel_size=(3, 3),
+            num_layers=conv_lstm_layers,
+            batch_first=True
+        ) 
+        self.yolo_conv_lstm = ConvLSTM(
+            input_dim=yt,
+            hidden_dim=lstm_o_chns[2],
+            kernel_size=(3, 3),
+            num_layers=conv_lstm_layers,
+            batch_first=True
+        ) 
+        self.init_head((lstm_o_chns[0] * h * w) + (lstm_o_chns[1] * mh * mw) + (lstm_o_chns[2] * yh * yw))
+
+        self.train()
+    
+    def reset(self):
+        self.hs = [None, None, None]
+
+    def forward(self, x_and_map_and_frame, use_hs=False):
+        x, map_in, frame = x_and_map_and_frame # screen center of the game and the corner of map
+        seq_len, channels, height, width = x.size() 
+
+        x = torch.nan_to_num_(x, 0)
+        map_in = torch.nan_to_num_(map_in, 0)
+
+        features = self.features(x)
+        map_features = self.map_features(map_in)
+        with torch.no_grad():
+            # yolo_features = self.get_yolo_feature_class_0_p3(self.yolo_features(frame))
+            yolo_features = self.get_yolo_feature_p2_p3(self.yolo_features(frame))
+            print(yolo_features.shape)
+
+        if not use_hs:
+            hs = None
+            map_hs = None
+            yolo_hs = None
+        else:
+            hs = self.hs[0]
+            map_hs = self.hs[1]
+            yolo_hs = self.hs[2]
+
+
+        o, hs = self.conv_lstm(features.unsqueeze(0), hidden_state=hs)
+        map_o, map_hs = self.map_conv_lstm(map_features.unsqueeze(0), hidden_state=map_hs)
+        yolo_o, yolo_hs = self.yolo_conv_lstm(yolo_features.unsqueeze(0), hidden_state=yolo_hs)
+        if use_hs: self.hs = [hs, map_hs, yolo_hs]
+        o = o[0].squeeze(0)
+        map_o = map_o[0].squeeze(0)
+        yolo_o = yolo_o[0].squeeze(0)
+        assert (o.shape[0] == seq_len)
+        assert (map_o.shape[0] == seq_len)
+        assert (yolo_o.shape[0] == seq_len), f"{yolo_o.shape}"
+        o = o.reshape(o.shape[0], -1)
+        map_o = map_o.reshape(map_o.shape[0], -1)
+        yolo_o = yolo_o.reshape(yolo_o.shape[0], -1)
+
+        o = torch.cat([o, map_o, yolo_o], dim=1)
+        o = self.shared_head_layer(o)
+
+        return self.act_head(o), self.value_head(o)
+
+    @staticmethod
+    def get_p1_p2_p3(yolo_logit):
+        if len(yolo_logit) == 2:
+            # batch = 1
+            p1 = yolo_logit[1][0]
+            p2 = yolo_logit[1][1]
+            p3 = yolo_logit[1][2]
+        elif len(yolo_logit) == 3:
+            # batch > 1 
+            # print("len(yolo_logit): " , len(yolo_logit))
+            # print("yolo_logit[0].shape: ", yolo_logit[0].shape)
+            # print("len(yolo_logit[1]): ", len(yolo_logit[1]))
+            # print("len(yolo_logit[2]): ", len(yolo_logit[2]))
+            # print("yolo_logit[1][0].shape: ", yolo_logit[1][0].shape)
+            # print("yolo_logit[1][1].shape: ", yolo_logit[1][1].shape)
+            # print("yolo_logit[1][2].shape: ", yolo_logit[1][2].shape)
+            # print("yolo_logit[2][0].shape: ", yolo_logit[2][0].shape)
+            # print("yolo_logit[2][1].shape: ", yolo_logit[2][1].shape)
+            # print("yolo_logit[2][2].shape: ", yolo_logit[2][2].shape)
+            p1 = yolo_logit[0]
+            p2 = yolo_logit[1]
+            p3 = yolo_logit[2]
+            assert p1.shape[0] == p1.shape[0] == p3.shape[0]
+            assert p1.shape[1] == p1.shape[1] == p3.shape[1]  # channels
+        else:
+            raise NotImplementedError
+        return p1, p2, p3
+
+    @classmethod
+    def get_yolo_feature_class_0_p3(cls, yolo_logit):
+        p1, p2, p3 = YoloMapAC.get_p1_p2_p3(yolo_logit)
+        Seq, C, H, W = p3.shape
+        def _extract_class(feat):
+            feat = feat.view(Seq, 3, 25, *feat.shape[-2:])
+            # 提取坐标偏移(0:3)、置信度(4)和player概率(5)
+            return torch.cat([
+                feat[:,:,:4],  # 位置/尺寸信息
+                feat[:,:,4:5], # 置信度
+                feat[:,:,5:6]  # player分类logit
+            ], dim=2)  # [1,3,6,H,W]
+        p3_cls = _extract_class(p3) # [1,18,18,40]
+        p3_cls = p3_cls.flatten(1,2) 
+        return p3_cls
+
+    @classmethod
+    def get_yolo_feature_p3(cls, yolo_logit):
+        p1, p2, p3 = YoloMapAC.get_p1_p2_p3(yolo_logit)
+        return p3
+
+    @classmethod
+    def get_yolo_feature_p2_p3(cls, yolo_logit):
+        p1, p2, p3 = YoloMapAC.get_p1_p2_p3(yolo_logit)
+        Seq, C, H, W = p2.shape
+        p3_up = F.interpolate(p3, size=(H,W), mode='bilinear')
+        fused = torch.concatenate([
+            p2, p3_up
+        ], dim = 1)
+        return fused  
+
+    @classmethod
+    def get_yolo_feature_class_0(cls, yolo_logit):
+        p1, p2, p3 = YoloMapAC.get_p1_p2_p3(yolo_logit)
+        """
+        专注提取player(类别0)相关特征
+        输入: 
+            p1: [1,75,72,160] (P3)
+            p2: [1,75,36,80]  (P4)
+            p3: [1,75,18,40]  (P5)
+        输出: 
+            [1,32,72,160] player专属热力图特征
+        """
+        H, W = p1.shape[-2:]
+        def _extract_class(feat):
+            feat = feat.view(1, 3, 25, *feat.shape[-2:])
+            # 提取坐标偏移(0:3)、置信度(4)和player概率(5)
+            return torch.cat([
+                feat[:,:,:4],  # 位置/尺寸信息
+                feat[:,:,4:5], # 置信度
+                feat[:,:,5:6]  # player分类logit
+            ], dim=2)  # [1,3,6,H,W]
+        
+        # 三尺度特征处理
+        p1_cls = _extract_class(p1).flatten(1,2)  # [1,18,72,160]
+        p2_cls = _extract_class(p2).flatten(1,2)  # [1,18,36,80]
+        p3_cls = _extract_class(p3).flatten(1,2)  # [1,18,18,40]
+        
+        # 上采样并融合
+        p2_up = F.interpolate(p2_cls, size=(H,W), mode='bilinear')
+        p3_up = F.interpolate(p3_cls, size=(H,W), mode='bilinear')
+        
+        fused = torch.concat([
+            p1_cls,
+            p2_up,
+            p3_up,
+        ], dim=1)
+        return fused
 
 class TransformerMapAC(MapACBase):
     def __init__(self, max_seq_len=45):
