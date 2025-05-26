@@ -1,4 +1,4 @@
-# SIRI-Agent: Visual Imitation Learning for CODM
+# SIRI-Agent: Visual Driven Policy for CODM
 
 SIRI (Swift Insight Reinforce-Imitate) Agent is an AI system that performs visual imitation learning in the mobile game CODM (Call of Duty: Mobile).
 
@@ -22,14 +22,14 @@ SIRI (Swift Insight Reinforce-Imitate) Agent is an AI system that performs visua
 <img src="assets/demo3_preview.gif" width="600"/>
 
 ### Rule-based Method Comparison
-Below is a demonstration of a rule-based approach using behavior trees and MiDaS depth information for navigation. While this method provides basic functionality, it shows limitations compared to our imitation learning approach:
+Below is a demonstration of a rule-based approach using behavior trees and MiDaS depth information for navigation :
 
 ![Rule-based Navigation Demo](assets/rule-based_method_demo.gif)
 
 ## Introduction
-SIRI-Agent addresses the challenge of implementing AI agents in mobile games without API access. Through pure visual imitation learning, it successfully replicates human gameplay in CODM while meeting real-time performance requirements.
+SIRI-Agent addresses the challenge of implementing AI agents in fps mobile games without API access. 
 
-## Dataset
+## Human-Annotated Dataset
 ![Dataset Overview](assets/PPT-Dataset.png)
 Our comprehensive dataset includes:
 - Total Size: 240 GiB
@@ -37,26 +37,13 @@ Our comprehensive dataset includes:
 - Multiple scenarios and gameplay styles
 - Carefully curated to ensure broad state coverage
 
+## IDM
+To scale our dataset efficiently, we Constructed a Inverse Dynamics Model (IDM) that automatically infers action sequences from raw gameplay footage.
+![IDM](assets/IDM.png)
+
 ## Model Architecture
-We propose two network architectures:
-
-### Lightweight Architecture
-![Lightweight Network](assets/PPT-NN1.png)
-Our lightweight architecture focuses on real-time performance while maintaining accurate predictions.
-
-### Enhanced Architecture
-![Enhanced Network with Feature Fusion](assets/PPT-NN2.png)
-The enhanced architecture combines:
-- EfficientNet for efficient feature extraction
-- MiDaS for depth perception
-- Feature fusion for improved understanding
-
-## Features
-- Pure vision-based imitation learning without API dependencies
-- Real-time gameplay operation capabilities
-- Lightweight model architecture for efficient processing
-- Comprehensive state coverage through carefully curated datasets
-- Mitigation of behavioral cloning cumulative error
+Initially, we developed a Single-Aspect Policy Model based on the first-person perspective of the in-game character. Recognizing the critical role of the minimap dynamics and HUD information, we advanced to construct a Multi-Aspect Fusion Model and get better performance.
+![NN](assets/PPT-NN.png)
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
